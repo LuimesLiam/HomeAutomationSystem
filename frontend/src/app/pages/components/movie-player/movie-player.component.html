@@ -1,0 +1,187 @@
+<div class="container">
+  <!-- Search and Navigation Section -->
+  <div *ngIf="!videoPath" class="search-navigation">
+    <div class="search-container">
+      <!-- Search Input -->
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        (keyup.enter)="search()"
+        [placeholder]="selectedTabIndex === 1 ? 'Search for TV series...' : 'Search for movies...'"
+        class="search-input"
+      />
+      <span style="margin-left:8px; color:#888; font-size:13px;">Library Search</span>
+
+      <!-- Search and Clear Buttons -->
+      <button (click)="search()" class="search-button" [disabled]="searchLoading">
+        {{ searchLoading ? 'Searching...' : 'Search Go' }}
+      </button>
+      <button (click)="clearSearch()" class="clear-button">Clear</button>
+
+    </div>
+    <p-progressbar *ngIf="loading && !syncing" mode="indeterminate"></p-progressbar>
+    <div class="sync-spinner" *ngIf="syncing" style="display:flex;justify-content:center;align-items:center;margin:16px 0;">
+      <p-progressspinner [style]="{ width: '40px', height: '40px' }"></p-progressspinner>
+      <span style="margin-left:12px;">Syncing...</span>
+    </div>
+
+    <p-tabs [value]="selectedTabIndex" (valueChange)="onTabChange(+($event ?? 0))">
+      <p-tablist>
+        <p-tab [value]="0">Movies</p-tab>
+        <p-tab [value]="1">TV</p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel [value]="0">
+        <app-movies-list [movies]="filteredMovies" (play)="openMediaDetails($event)"></app-movies-list>
+        </p-tabpanel>
+        <p-tabpanel [value]="1">
+        <app-tv-list [shows]="filteredEpisodes" (play)="openMediaDetails($event)"></app-tv-list>
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+  </div>
+
+  <div
+    *ngIf="selectedMedia && !videoPath"
+    class="media-detail-overlay"
+    (click)="closeMediaDetails()"
+  >
+    <div class="media-detail-card" (click)="$event.stopPropagation()">
+      <button class="media-detail-close" (click)="closeMediaDetails()">✖</button>
+      <div class="media-detail-content">
+        <img
+          class="media-detail-poster"
+          [src]="selectedMedia.thumbnail || selectedMedia.thumbnailUrl || 'assets/placeholder-poster.svg'"
+          [alt]="selectedMedia.title || selectedMedia.name || 'Selected media'"
+          loading="lazy"
+          (error)="onDetailImageError($event)"
+        />
+        <div class="media-detail-info">
+          <h2>{{ selectedMedia.title || selectedMedia.name }}</h2>
+          <div class="media-detail-meta">
+            <span *ngIf="selectedMedia.year">{{ selectedMedia.year }}</span>
+            <span *ngIf="selectedMedia.genre">{{ selectedMedia.genre }}</span>
+            <span *ngIf="selectedMedia.season !== undefined">Season {{ selectedMedia.season }}</span>
+            <span *ngIf="selectedMedia.episodeNumber !== undefined">Episode {{ selectedMedia.episodeNumber }}</span>
+          </div>
+          <p class="media-detail-description">
+            {{ selectedMedia.description || 'No description available.' }}
+          </p>
+          <div class="media-address-toggle">
+            <span class="media-address-label">Playback address</span>
+            <div class="media-address-options">
+              <button
+                type="button"
+                [class.active]="addressMode === 'browser'"
+                (click)="addressMode = 'browser'">
+                VPN / Current
+              </button>
+              <button
+                type="button"
+                [class.active]="addressMode === 'home'"
+                [disabled]="!canUseHomeAddress()"
+                (click)="addressMode = 'home'">
+                Home / LAN
+              </button>
+            </div>
+            <p class="media-address-help">
+              Use `VPN / Current` for meshnet browser playback. Use `Home / LAN` before casting on your local network.
+            </p>
+            <p class="media-edit-error" *ngIf="playbackAddressError">{{ playbackAddressError }}</p>
+          </div>
+          <div class="media-detail-actions">
+            <button class="primary" (click)="startPlayback('website', selectedMedia)" [disabled]="playbackAddressLoading">
+              {{ playbackAddressLoading ? 'Preparing...' : 'Play in Website' }}
+            </button>
+            <button (click)="startPlayback('tv', selectedMedia)" [disabled]="playbackAddressLoading">Play on TV</button>
+            <button (click)="startPlayback('url', selectedMedia)" [disabled]="playbackAddressLoading">Display URL</button>
+            <button *ngIf="isMovieSelection()" (click)="startEditDetails()">Edit Details</button>
+          </div>
+          <div class="media-edit-panel" *ngIf="isEditingDetails && isMovieSelection()">
+            <label class="media-edit-label">
+              Title
+              <input class="media-edit-input" [(ngModel)]="editModel.title" placeholder="Title" />
+            </label>
+            <label class="media-edit-label">
+              Year
+              <input class="media-edit-input" [(ngModel)]="editModel.year" placeholder="Year" />
+            </label>
+            <label class="media-edit-label">
+              Genre
+              <input class="media-edit-input" [(ngModel)]="editModel.genre" placeholder="Genre" />
+            </label>
+            <label class="media-edit-label">
+              Description
+              <textarea class="media-edit-textarea" rows="4" [(ngModel)]="editModel.description" placeholder="Description"></textarea>
+            </label>
+            <p class="media-edit-error" *ngIf="editError">{{ editError }}</p>
+            <div class="media-edit-actions">
+              <button class="primary" (click)="saveMovieDetails()" [disabled]="editSaving">
+                {{ editSaving ? 'Saving...' : 'Save Changes' }}
+              </button>
+              <button (click)="resyncMovieDetails()" [disabled]="editSyncing">
+                {{ editSyncing ? 'Resyncing...' : 'Resync from OMDB' }}
+              </button>
+              <button (click)="cancelEditDetails()">Back</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Player Section -->
+  <div *ngIf="videoPath" class="video-overlay">
+    <button (click)="closeVideo()" class="close-button">✖</button>
+    <div *ngIf="playbackMode == 'website'" class="video-player-container">
+      
+      <video #videoPlayer controls [src]="videoPath"></video>
+    </div>
+    <div *ngIf="playbackMode == 'url'" class="url-display-container">
+      <div class="url-box">
+        <p>{{ getEncodedUrl(videoPath) }}</p>
+        
+      </div>
+      <button (click)="copyToClipboard(videoPath)" class="copy-button">Copy URL</button>
+      <p class="copy-instructions">Click "Copy URL" to copy the link to your clipboard.</p>
+    </div>
+
+  </div>
+
+  <div *ngIf="playbackMode == 'tv'" class="fixed-bottom-controls">
+    <div class="video-controls">
+      <button (click)="controlVideo(playing ? 'pause' : 'resume')">
+        <span *ngIf="playing">Pause</span> 
+        <span *ngIf="!playing">Resume</span>
+      </button>
+      <button (click)="seekTvBy(-10)">Back 10s</button>
+      <button (click)="seekTvBy(10)">Forward 10s</button>
+      <button (click)="controlVideo('stop')">Stop</button>
+      <button (click)="syncTimeBar()">Resync</button>
+    </div>
+    <div class="time-bar-container">
+      <input
+        id="time-bar"
+        type="range"
+        min="0"
+        max="100"
+        [(ngModel)]="timeBarValue"
+        (input)="updateSeekTime(timeBarValue)"
+        (change)="seekToPosition(timeBarValue)"
+      />
+      <div class="time-display">
+        <span class="current-time">{{ currentTimeDisplay }}</span>
+        <span class="divider">/</span>
+        <span class="total-time">{{ totalTimeDisplay }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Spinner Overlay -->
+  <div *ngIf="loading" class="loading-overlay">
+    <div class="loading-spinner">
+      <p-progressspinner [style]="{ width: '60px', height: '60px' }"></p-progressspinner>
+      <div class="loading-text">Syncing, please wait...</div>
+    </div>
+  </div>
+</div>

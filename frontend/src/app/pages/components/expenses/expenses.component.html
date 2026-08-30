@@ -1,0 +1,1099 @@
+<div class="expenses-page">
+  <div class="expenses-hero">
+    <div>
+      <h1 class="page-title">Expenses</h1>
+      <p class="page-subtitle">Capture receipts, add manual entries, review spend quickly, and choose which AI model classifies incoming expenses.</p>
+    </div>
+
+    <div class="hero-actions">
+      <button class="secondary-button" type="button" (click)="loadDashboard()" [disabled]="loading()">Refresh</button>
+    </div>
+  </div>
+
+  <div class="status-banner" *ngIf="pageMessage()">
+    {{ pageMessage() }}
+  </div>
+
+  <div class="expenses-tabs" aria-label="Expense sections">
+    <button
+      class="tab-button"
+      type="button"
+      [class.tab-button-active]="isActiveSection('capture')"
+      (click)="setActiveSection('capture')">
+      Capture Expense
+    </button>
+    <button
+      class="tab-button"
+      type="button"
+      [class.tab-button-active]="isActiveSection('history')"
+      (click)="setActiveSection('history')">
+      History & Totals
+    </button>
+    <button
+      class="tab-button"
+      type="button"
+      [class.tab-button-active]="isActiveSection('items')"
+      (click)="setActiveSection('items')">
+      Price Finder
+    </button>
+    <button
+      class="tab-button"
+      type="button"
+      [class.tab-button-active]="isActiveSection('report')"
+      (click)="setActiveSection('report')">
+      Monthly Report
+    </button>
+    <button
+      class="tab-button"
+      type="button"
+      [class.tab-button-active]="isActiveSection('settings')"
+      (click)="setActiveSection('settings')">
+      Settings
+    </button>
+  </div>
+
+  <div class="expenses-stack">
+    <section class="expense-panel intake-panel" *ngIf="isActiveSection('capture')">
+      <div class="panel-heading">
+        <h2>Capture Or Enter</h2>
+        <p>Use the camera on your phone, upload a receipt, or enter the expense manually when there is no receipt.</p>
+      </div>
+
+      <div class="capture-hero-card">
+        <div class="capture-copy">
+          <span class="capture-eyebrow">Phone Friendly Capture</span>
+          <h3>Snap first, review second</h3>
+          <p>The camera chooser is front and center so this feels quick on a phone. You can still add manual totals and corrections below before saving.</p>
+        </div>
+
+        <label class="upload-dropzone">
+          <input type="file" accept="image/*" capture="environment" (change)="onFileSelected($event)" />
+          <span class="upload-title">Take or upload receipt</span>
+          <span class="upload-subtitle">Opens the rear camera on mobile when available</span>
+          <span class="upload-file" *ngIf="selectedFileName()">{{ selectedFileName() }}</span>
+        </label>
+      </div>
+
+      <div class="capture-hero-card csv-import-card">
+        <div class="capture-copy">
+          <span class="capture-eyebrow">Statement Import</span>
+          <h3>Bring in card or bank exports</h3>
+          <p>Upload a CSV statement export or paste a copied browser fetch request. The agent will classify purchases, skip likely duplicates, and return a row-by-row report.</p>
+        </div>
+
+        <label class="upload-dropzone csv-dropzone">
+          <input type="file" accept=".csv,text/csv" (change)="onCsvFileSelected($event)" />
+          <span class="upload-title">Choose statement CSV</span>
+          <span class="upload-subtitle">Schema detection is built in so we can add more bank export formats without changing the import flow.</span>
+          <span class="upload-file" *ngIf="selectedCsvFileName()">{{ selectedCsvFileName() }}</span>
+        </label>
+
+        <div class="request-feedback" *ngIf="csvImportFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
+          <strong>
+            {{ feedback.tone === 'pending' ? 'Working...' : feedback.tone === 'success' ? 'Completed' : 'Action failed' }}
+          </strong>
+          <span>{{ feedback.message }}</span>
+        </div>
+
+        <div class="csv-import-actions">
+          <button class="ghost-button" type="button" (click)="openFetchImportDialog()" [disabled]="importingCsv() || importingFetch()">
+            Paste Fetch Request
+          </button>
+          <button class="action-button" type="button" (click)="importCsv()" [disabled]="importingCsv()">
+            {{ importingCsv() ? 'Importing CSV...' : 'Import CSV With AI Classification' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="form-grid two-column">
+        <label class="field-block">
+          <span>Classification group</span>
+          <select [ngModel]="expenseForm().expenseGroupId ?? ''" (ngModelChange)="updateForm('expenseGroupId', $event ? +$event : null)">
+            <option value="">Select a group</option>
+            <option *ngFor="let group of expenseGroups(); trackBy: trackByGroupId" [value]="group.id">
+              {{ group.name }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field-block">
+          <span>Date</span>
+          <p-datepicker
+            inputId="manualExpenseDate"
+            styleClass="expense-date-picker"
+            inputStyleClass="expense-date-picker-input"
+            [ngModel]="expenseForm().expenseDate"
+            (ngModelChange)="setManualExpenseDate($event)"
+            dateFormat="yy-mm-dd"
+            dataType="string"
+            [showIcon]="true"
+            iconDisplay="input"
+            [showButtonBar]="true"
+            [readonlyInput]="true">
+          </p-datepicker>
+        </label>
+      </div>
+
+      <div class="form-grid four-column">
+        <label class="field-block">
+          <span>Total</span>
+          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().totalAmount" (ngModelChange)="updateForm('totalAmount', $event)" placeholder="0.00" />
+        </label>
+
+        <label class="field-block">
+          <span>Subtotal</span>
+          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().subtotalAmount" (ngModelChange)="updateForm('subtotalAmount', $event)" placeholder="0.00" />
+        </label>
+
+        <label class="field-block">
+          <span>Tax</span>
+          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().taxAmount" (ngModelChange)="updateForm('taxAmount', $event)" placeholder="0.00" />
+        </label>
+
+        <label class="field-block">
+          <span>Tip</span>
+          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().tipAmount" (ngModelChange)="updateForm('tipAmount', $event)" placeholder="0.00" />
+        </label>
+      </div>
+
+      <div class="form-grid two-column">
+        <label class="field-block">
+          <span>Merchant</span>
+          <input type="text" [ngModel]="expenseForm().merchantName" (ngModelChange)="updateForm('merchantName', $event)" placeholder="Store or vendor" />
+        </label>
+
+        <label class="field-block">
+          <span>Location</span>
+          <input type="text" [ngModel]="expenseForm().location" (ngModelChange)="updateForm('location', $event)" placeholder="City or branch" />
+        </label>
+      </div>
+
+      <div class="form-grid three-column">
+        <label class="field-block">
+          <span>Currency</span>
+          <input type="text" maxlength="3" [ngModel]="expenseForm().currencyCode" (ngModelChange)="updateForm('currencyCode', ($event || '').toUpperCase())" placeholder="USD" />
+        </label>
+
+        <label class="field-block">
+          <span>Payment method</span>
+          <input type="text" [ngModel]="expenseForm().paymentMethod" (ngModelChange)="updateForm('paymentMethod', $event)" placeholder="Card, cash, Apple Pay" />
+        </label>
+
+        <label class="field-block">
+          <span>Short description</span>
+          <input type="text" [ngModel]="expenseForm().description" (ngModelChange)="updateForm('description', $event)" placeholder="Weekly grocery run" />
+        </label>
+      </div>
+
+      <label class="field-block">
+        <span>Receipt text</span>
+        <textarea rows="4" [ngModel]="expenseForm().receiptText" (ngModelChange)="updateForm('receiptText', $event)" placeholder="Optional OCR or copied receipt text if you don’t have an image"></textarea>
+      </label>
+
+      <label class="field-block">
+        <span>Notes</span>
+        <textarea rows="3" [ngModel]="expenseForm().notes" (ngModelChange)="updateForm('notes', $event)" placeholder="Anything else worth keeping with the expense"></textarea>
+      </label>
+
+      <div class="capture-form-footer">
+        <div class="request-feedback" *ngIf="captureFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
+          <strong>
+            {{ feedback.tone === 'pending' ? 'Working...' : feedback.tone === 'success' ? 'Completed' : 'Action failed' }}
+          </strong>
+          <span>{{ feedback.message }}</span>
+        </div>
+
+        <div class="capture-form-footer-header">
+          <div class="capture-actions-copy">
+            <strong>Save expense</strong>
+            <span>Manual save is for typed entries. AI save is for receipt photos or pasted receipt text.</span>
+          </div>
+
+          <div class="capture-mode-chip-row">
+            <span class="capture-mode-chip">Manual</span>
+            <span class="capture-mode-chip capture-mode-chip-accent">Receipt + AI</span>
+          </div>
+        </div>
+
+        <div class="capture-form-footer-actions">
+          <button class="ghost-button" type="button" (click)="autofillFromReceipt()" [disabled]="autofillingExpense() || savingManual() || analyzingReceipt()">
+            {{ autofillingExpense() ? 'Auto Filling...' : 'Auto Fill With AI' }}
+          </button>
+          <button class="secondary-button" type="button" (click)="saveManualExpense()" [disabled]="savingManual() || analyzingReceipt() || autofillingExpense()">
+            {{ savingManual() ? 'Saving...' : 'Save Manual Entry' }}
+          </button>
+          <button class="action-button" type="button" (click)="analyzeReceipt()" [disabled]="analyzingReceipt() || savingManual() || autofillingExpense()">
+            {{ analyzingReceipt() ? 'Analyzing And Saving...' : 'Analyze Receipt And Save' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="expense-panel table-panel" *ngIf="isActiveSection('history')">
+      <div class="panel-heading">
+        <h2>Table, Search, And Totals</h2>
+        <p>Filter the expense log fast and keep the filtered result exportable.</p>
+      </div>
+
+      <div class="history-toolbar">
+        <div class="history-groups" aria-label="Expense history groups">
+          <button
+            class="group-page-button"
+            type="button"
+            [class.group-page-button-active]="isActiveHistoryGroup(null)"
+            (click)="setHistoryGroup(null)">
+            All Expenses
+          </button>
+          <button
+            class="group-page-button"
+            type="button"
+            *ngFor="let group of expenseGroups(); trackBy: trackByGroupId"
+            [class.group-page-button-active]="isActiveHistoryGroup(group.key)"
+            (click)="setHistoryGroup(group.key)">
+            {{ group.name }}
+          </button>
+        </div>
+
+      </div>
+
+      <div class="request-feedback" *ngIf="historyFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
+        <strong>
+          {{ feedback.tone === 'pending' ? 'Working...' : feedback.tone === 'success' ? 'Completed' : 'Action failed' }}
+        </strong>
+        <span>{{ feedback.message }}</span>
+      </div>
+
+      <div class="expense-panel import-report-panel" *ngIf="csvImportReport() as report">
+        <div class="panel-heading import-report-heading">
+          <div>
+            <h2>Latest Import Report</h2>
+            <p>{{ report.schemaDisplayName }} detected. {{ report.addedCount }} added, {{ report.duplicateCount }} duplicates skipped, {{ report.reviewCount }} need review, {{ report.failedCount }} failed.</p>
+          </div>
+          <div class="capture-mode-chip-row">
+            <span class="capture-mode-chip">{{ report.totalRows }} rows</span>
+            <span class="capture-mode-chip">{{ report.schemaKey }}</span>
+            <span class="capture-mode-chip" *ngIf="report.reviewCount">{{ report.reviewCount }} review</span>
+          </div>
+        </div>
+
+        <div class="request-feedback request-feedback-pending" *ngIf="report.reviewCount">
+          <strong>Approval needed</strong>
+          <span>{{ pendingReviewItemsCount(report) }} row{{ pendingReviewItemsCount(report) === 1 ? '' : 's' }} look like possible duplicates on nearby dates. Review rows stay out of the database until you approve them.</span>
+        </div>
+
+        <div class="csv-import-actions import-review-actions" *ngIf="report.reviewCount">
+          <button class="action-button" type="button" (click)="approveSelectedImportRows()" [disabled]="approvingImportRows() || !selectedReviewItemsCount(report)">
+            {{ approvingImportRows() ? 'Approving...' : 'Approve Selected Review Rows' }}
+          </button>
+          <span class="table-secondary">{{ selectedReviewItemsCount(report) }} selected</span>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Approve</th>
+                <th>Row</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Merchant</th>
+                <th>Amount</th>
+                <th>Group</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of report.items">
+                <td>
+                  <input
+                    *ngIf="item.status === 'review' && item.approvalPayload"
+                    type="checkbox"
+                    [checked]="isImportApprovalSelected(item.approvalPayload)"
+                    (change)="toggleImportApprovalSelection(item.approvalPayload, $any($event.target).checked)" />
+                </td>
+                <td>{{ item.rowNumber }}</td>
+                <td class="table-primary">{{ importStatusLabel(item.status) }}</td>
+                <td>{{ item.expenseDate || 'N/A' }}</td>
+                <td>
+                  <div class="table-primary">{{ item.merchantName || item.rawColumns?.['details'] || 'Unknown' }}</div>
+                  <div class="table-secondary" *ngIf="item.expense?.sourceType">{{ sourceLabel(item.expense?.sourceType || '') }}</div>
+                  <div class="table-secondary" *ngIf="item.status === 'review' && item.expense">Possible match: {{ item.expense.merchantName || 'Existing expense' }} on {{ item.expense.expenseDate }}</div>
+                </td>
+                <td>{{ formatMoney(item.amount, item.currencyCode || settings().defaultCurrencyCode) }}</td>
+                <td>{{ item.expenseGroupName || item.expense?.expenseGroupName || 'Unclassified' }}</td>
+                <td>{{ item.message || 'Imported successfully.' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span class="summary-label">Filtered total</span>
+          <strong>{{ formatMoney(summary().totalAmount, settings().defaultCurrencyCode) }}</strong>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">{{ isActiveHistoryGroup(null) ? 'Entries' : 'Group entries' }}</span>
+          <strong>{{ summary().expenseCount }}</strong>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Average</span>
+          <strong>{{ formatMoney(summary().averageAmount, settings().defaultCurrencyCode) }}</strong>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">{{ isActiveHistoryGroup(null) ? 'Latest' : 'Latest in group' }}</span>
+          <strong>{{ summary().latestExpenseDate || 'N/A' }}</strong>
+        </div>
+      </div>
+
+      <div class="totals-strip" *ngIf="summary().totalsByGroup.length">
+        <div class="group-total-chip" *ngFor="let total of summary().totalsByGroup">
+          <span class="color-dot" [style.background]="total.color"></span>
+          <span>{{ total.name }}</span>
+          <strong>{{ formatMoney(total.totalAmount, settings().defaultCurrencyCode) }}</strong>
+        </div>
+      </div>
+
+      <div class="filter-grid">
+        <label class="field-block">
+          <span>Quick search</span>
+          <input type="text" [ngModel]="filterSearch()" (ngModelChange)="setFilterSearch($event)" placeholder="Merchant, notes, location, description" />
+        </label>
+
+        <label class="field-block">
+          <span>Group</span>
+          <select [ngModel]="filterExpenseGroupId() ?? ''" (ngModelChange)="setFilterExpenseGroupId($event)">
+            <option value="">All groups</option>
+            <option *ngFor="let group of expenseGroups(); trackBy: trackByGroupId" [value]="group.id">{{ group.name }}</option>
+          </select>
+        </label>
+
+        <label class="field-block">
+          <span>Source</span>
+          <select [ngModel]="filterSourceType()" (ngModelChange)="setFilterSourceType($event)">
+            <option value="">All sources</option>
+            <option value="manual">Manual</option>
+            <option value="receipt">Receipt</option>
+            <option value="csv-import">CSV import</option>
+            <option value="fetch-import">Fetch import</option>
+          </select>
+        </label>
+
+        <label class="field-block">
+          <span>From</span>
+          <input type="date" [ngModel]="filterDateFrom()" (ngModelChange)="setFilterDateFrom($event)" />
+        </label>
+
+        <label class="field-block">
+          <span>To</span>
+          <input type="date" [ngModel]="filterDateTo()" (ngModelChange)="setFilterDateTo($event)" />
+        </label>
+      </div>
+
+      <div class="panel-actions">
+        <button class="secondary-button" type="button" (click)="clearFilters()">Clear Filters</button>
+        <button class="action-button" type="button" (click)="applyFilters()">Apply Filters</button>
+      </div>
+
+      <div class="history-tools-row">
+        <div class="history-tools-copy">
+          <strong>History tools</strong>
+          <span>Export only the rows currently shown in this history view.</span>
+        </div>
+
+        <button class="action-button history-export-button" type="button" (click)="exportCsv()">Export CSV</button>
+      </div>
+
+      <div class="history-mobile-list">
+        <button
+          class="history-mobile-card"
+          type="button"
+          *ngFor="let expense of expenseEntries(); trackBy: trackByExpenseId"
+          (click)="openExpenseDetail(expense.id)">
+          <div class="history-mobile-card-header">
+            <div>
+              <div class="table-primary">{{ expense.merchantName || 'Unknown merchant' }}</div>
+              <div class="table-secondary">{{ expense.expenseDate }} · {{ sourceLabel(expense.sourceType) }}</div>
+            </div>
+            <strong class="history-mobile-amount">{{ formatMoney(expense.totalAmount, expense.currencyCode) }}</strong>
+          </div>
+
+          <div class="history-mobile-meta">
+            <span class="group-pill" [style.border-color]="expense.expenseGroupColor || '#94a3b8'" [style.color]="expense.expenseGroupColor || '#334155'">
+              {{ expense.expenseGroupName || 'Unclassified' }}
+            </span>
+            <span>{{ expense.location || 'No location' }}</span>
+            <span>{{ expense.paymentMethod || 'No payment method' }}</span>
+          </div>
+
+          <div class="history-mobile-description">
+            {{ expense.description || expense.notes || 'No description' }}
+          </div>
+        </button>
+
+        <div class="empty-state history-mobile-empty" *ngIf="!loading() && expenseEntries().length === 0">
+          No expenses match the current filters.
+        </div>
+      </div>
+
+      <div class="table-wrapper history-desktop-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Merchant</th>
+              <th>Group</th>
+              <th>Source</th>
+              <th>Location</th>
+              <th>Total</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let expense of expenseEntries(); trackBy: trackByExpenseId" class="clickable-row" (click)="openExpenseDetail(expense.id)">
+              <td>{{ expense.expenseDate }}</td>
+              <td>
+                <div class="table-primary">{{ expense.merchantName || 'Unknown merchant' }}</div>
+                <div class="table-secondary" *ngIf="expense.paymentMethod">{{ expense.paymentMethod }}</div>
+                <div class="capture-mode-chip-row" *ngIf="reimbursementBadges(expense).length">
+                  <span class="capture-mode-chip" *ngFor="let badge of reimbursementBadges(expense)">{{ badge }}</span>
+                </div>
+              </td>
+              <td>
+                <span class="group-pill" [style.border-color]="expense.expenseGroupColor || '#94a3b8'" [style.color]="expense.expenseGroupColor || '#334155'">
+                  {{ expense.expenseGroupName || 'Unclassified' }}
+                </span>
+              </td>
+              <td>{{ sourceLabel(expense.sourceType) }}</td>
+              <td>{{ expense.location || 'N/A' }}</td>
+              <td>{{ formatMoney(expense.totalAmount, expense.currencyCode) }}</td>
+              <td>
+                <div class="table-primary">{{ expense.description || expense.notes || 'No description' }}</div>
+                <div class="table-secondary" *ngIf="expense.receiptFileName">{{ expense.receiptFileName }}</div>
+              </td>
+            </tr>
+            <tr *ngIf="!loading() && expenseEntries().length === 0">
+              <td colspan="7" class="empty-state">No expenses match the current filters.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="expense-panel item-finder-panel" *ngIf="isActiveSection('items')">
+      <div class="panel-heading">
+        <h2>Item Price Finder</h2>
+        <p>Search receipt items to compare the prices you paid at each store.</p>
+      </div>
+
+      <form class="item-search-bar" (submit)="$event.preventDefault(); loadItems()">
+        <label class="field-block">
+          <span>What are you shopping for?</span>
+          <input type="search" [ngModel]="itemSearch()" (ngModelChange)="setItemSearch($event)" name="itemSearch" placeholder="Try cucumbers, milk, detergent..." />
+        </label>
+        <button class="action-button" type="submit" [disabled]="loadingItems()">
+          {{ loadingItems() ? 'Searching...' : 'Compare Prices' }}
+        </button>
+      </form>
+
+      <div class="request-feedback" *ngIf="itemFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-error]="feedback.tone === 'error'">
+        <strong>{{ feedback.tone === 'pending' ? 'Working...' : 'Action failed' }}</strong>
+        <span>{{ feedback.message }}</span>
+      </div>
+
+      <div class="item-empty" *ngIf="!loadingItems() && !itemComparisons().length">
+        <strong>No matching receipt items yet.</strong>
+        <span>Scan an itemized receipt, then its products and store prices will appear here.</span>
+      </div>
+
+      <div class="item-comparison-list" *ngIf="itemComparisons().length">
+        <details class="item-comparison-card" *ngFor="let item of itemComparisons()">
+          <summary>
+            <div>
+              <strong>{{ item.name }}</strong>
+              <span>{{ item.purchaseCount }} purchase{{ item.purchaseCount === 1 ? '' : 's' }} across your receipts</span>
+            </div>
+            <div class="item-best-price">
+              <span>Lowest seen</span>
+              <strong>{{ formatMoney(item.lowestPrice, item.purchases[0]?.currencyCode || settings().defaultCurrencyCode) }}</strong>
+              <small>{{ item.lowestPriceMerchant || 'Unknown store' }}</small>
+            </div>
+          </summary>
+
+          <div class="item-price-table">
+            <div class="item-classification-control">
+              <label>
+                <span>Reclassify all “{{ item.name }}” entries as</span>
+                <select [ngModel]="item.normalizedName" (ngModelChange)="reclassifyComparison(item, $event)" [disabled]="reclassifyingItem()">
+                  <option *ngFor="let existingItem of itemComparisons()" [value]="existingItem.normalizedName">{{ existingItem.name }}</option>
+                  <option value="__new__">+ Add a new product name…</option>
+                </select>
+              </label>
+              <small>Choosing an existing name merges the price histories and teaches future receipt scans that vocabulary.</small>
+            </div>
+            <div class="item-price-row item-price-heading">
+              <span>Store</span><span>Price</span><span>Quantity</span><span>Date</span>
+            </div>
+            <button class="item-price-row" type="button" *ngFor="let purchase of item.purchases" (click)="openExpenseDetail(purchase.expenseId)">
+              <span><strong>{{ purchase.merchantName || 'Unknown store' }}</strong><small>{{ purchase.location || 'Location not recorded' }}</small></span>
+              <span><strong>{{ itemPriceLabel(purchase) }}</strong><small>{{ formatMoney(purchase.totalPrice, purchase.currencyCode) }} line total</small></span>
+              <span>{{ purchase.quantity || 1 }} {{ purchase.unit || '' }}</span>
+              <span>{{ purchase.expenseDate }}</span>
+            </button>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="expense-panel report-panel" *ngIf="isActiveSection('report')">
+      <div class="panel-heading">
+        <h2>Monthly Report</h2>
+        <p>Focus on one month at a time, narrow it to specific days, and scan the patterns that usually matter most in household spending.</p>
+      </div>
+
+      <div class="report-toolbar">
+        <div class="filter-grid report-filter-grid">
+          <div class="field-block report-month-block">
+            <span>Month</span>
+            <div class="report-month-picker">
+              <button class="ghost-button report-month-nav" type="button" (click)="shiftReportMonth(-1)" aria-label="Previous month">
+                Prev
+              </button>
+
+              <select [ngModel]="reportMonthValue()" (ngModelChange)="setReportMonthName($event)">
+                <option *ngFor="let month of reportMonthOptions" [value]="month.value">{{ month.label }}</option>
+              </select>
+
+              <select [ngModel]="reportYear()" (ngModelChange)="setReportYear($event)">
+                <option *ngFor="let year of reportYearOptions()" [value]="year">{{ year }}</option>
+              </select>
+
+              <button class="ghost-button report-month-nav" type="button" (click)="shiftReportMonth(1)" aria-label="Next month">
+                Next
+              </button>
+            </div>
+          </div>
+
+          <label class="field-block">
+            <span>Day from</span>
+            <input type="number" min="1" max="31" [ngModel]="reportDayFrom()" (ngModelChange)="setReportDayFrom($event)" placeholder="1" />
+          </label>
+
+          <label class="field-block">
+            <span>Day to</span>
+            <input type="number" min="1" max="31" [ngModel]="reportDayTo()" (ngModelChange)="setReportDayTo($event)" placeholder="End of month" />
+          </label>
+
+          <label class="field-block">
+            <span>Group focus</span>
+            <select [ngModel]="filterExpenseGroupId() ?? ''" (ngModelChange)="setFilterExpenseGroupId($event)">
+              <option value="">All groups</option>
+              <option *ngFor="let group of expenseGroups(); trackBy: trackByGroupId" [value]="group.id">{{ group.name }}</option>
+            </select>
+          </label>
+
+          <label class="field-block inline-toggle report-toggle-block">
+            <span>Exclude reimbursable</span>
+            <input
+              type="checkbox"
+              [ngModel]="reportExcludeReimbursable()"
+              (ngModelChange)="setReportExcludeReimbursable(!!$event)" />
+          </label>
+        </div>
+
+        <div class="panel-actions">
+          <button class="secondary-button" type="button" (click)="resetReportFilters()">Reset Report</button>
+          <button class="action-button" type="button" (click)="applyReportFilters()">Refresh Report</button>
+        </div>
+      </div>
+
+      <div class="report-banner">
+        <div>
+          <strong>{{ reportMonthLabel() }}</strong>
+          <span>{{ reportRangeLabel() }}</span>
+        </div>
+        <div class="capture-mode-chip-row">
+          <span class="capture-mode-chip">{{ reportEntryCount() }} entries</span>
+          <span class="capture-mode-chip">{{ selectedReportGroupLabel() }}</span>
+          <span class="capture-mode-chip" *ngIf="reportExcludeReimbursable()">Reimbursable excluded</span>
+        </div>
+      </div>
+
+      <div class="summary-grid report-summary-grid">
+        <div class="summary-card report-card-accent">
+          <span class="summary-label">Spend in range</span>
+          <strong>{{ formatMoney(reportTotalAmount(), settings().defaultCurrencyCode) }}</strong>
+          <small>{{ reportMonthLabel() }}</small>
+        </div>
+
+        <div class="summary-card">
+          <span class="summary-label">Average per day</span>
+          <strong>{{ formatMoney(reportAveragePerDay(), settings().defaultCurrencyCode) }}</strong>
+          <small>{{ reportCoveredDays() }} day window</small>
+        </div>
+
+        <div class="summary-card">
+          <span class="summary-label">Projected full month</span>
+          <strong>{{ formatMoney(reportProjectedMonthTotal(), settings().defaultCurrencyCode) }}</strong>
+          <small>Based on current run rate</small>
+        </div>
+
+        <div class="summary-card" *ngIf="reportHighestDay() as highestDay">
+          <span class="summary-label">Highest spend day</span>
+          <strong>{{ formatMoney(highestDay.totalAmount, settings().defaultCurrencyCode) }}</strong>
+          <small>Day {{ highestDay.day }} · {{ highestDay.expenseCount }} entries</small>
+        </div>
+
+        <div class="summary-card" *ngIf="reportTopGroup() as topGroup">
+          <span class="summary-label">Biggest category</span>
+          <strong>{{ topGroup.name }}</strong>
+          <small>{{ formatMoney(topGroup.totalAmount, settings().defaultCurrencyCode) }} · {{ topGroup.percent | number:'1.0-0' }}%</small>
+        </div>
+      </div>
+
+      <div class="report-grid" *ngIf="reportEntries().length; else emptyReportState">
+        <article class="report-card report-card-wide">
+          <div class="report-card-header">
+            <div>
+              <h3>Daily spend trend</h3>
+              <p>Quick scan of how the month rises and falls day by day.</p>
+            </div>
+            <strong>{{ formatMoney(reportMaxDailySpend(), settings().defaultCurrencyCode) }}</strong>
+          </div>
+
+          <div class="report-line-chart">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polygon [attr.points]="reportDailyChartAreaPoints()" class="report-area-fill"></polygon>
+              <polyline [attr.points]="reportDailyChartPoints()" class="report-line-path"></polyline>
+            </svg>
+          </div>
+
+          <div class="report-day-bars">
+            <div class="report-day-bar" *ngFor="let day of reportDailyBars()">
+              <div
+                class="report-day-bar-fill"
+                [style.height.%]="reportMaxDailySpend() > 0 ? (day.totalAmount / reportMaxDailySpend()) * 100 : 0"
+                [attr.title]="'Day ' + day.day + ': ' + formatMoney(day.totalAmount, settings().defaultCurrencyCode)">
+              </div>
+              <span>{{ day.day }}</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="report-card">
+          <div class="report-card-header">
+            <div>
+              <h3>Category split</h3>
+              <p>Shows which buckets are driving this month.</p>
+            </div>
+          </div>
+
+          <div class="report-stack-list">
+            <button class="report-stack-row report-stack-row-button" type="button" *ngFor="let group of reportGroupShares()" (click)="openReportGroup(group)">
+              <div class="report-stack-meta">
+                <span class="group-pill" [style.border-color]="group.color" [style.color]="group.color">{{ group.name }}</span>
+                <strong>{{ formatMoney(group.totalAmount, settings().defaultCurrencyCode) }}</strong>
+              </div>
+              <div class="report-stack-track">
+                <div class="report-stack-fill" [style.width.%]="group.percent" [style.background]="group.color"></div>
+              </div>
+              <small>{{ group.percent | number:'1.0-0' }}% · {{ group.expenseCount }} entries</small>
+            </button>
+          </div>
+        </article>
+
+        <article class="report-card">
+          <div class="report-card-header">
+            <div>
+              <h3>Weekday pattern</h3>
+              <p>Helpful for spotting shopping days and bill-heavy weekdays.</p>
+            </div>
+          </div>
+
+          <div class="weekday-chart">
+            <div class="weekday-row" *ngFor="let weekday of reportWeekdayTotals()">
+              <span>{{ weekday.label }}</span>
+              <div class="weekday-track">
+                <div
+                  class="weekday-fill"
+                  [style.width.%]="reportMaxWeekdaySpend() > 0 ? (weekday.totalAmount / reportMaxWeekdaySpend()) * 100 : 0">
+                </div>
+              </div>
+              <strong>{{ formatMoney(weekday.totalAmount, settings().defaultCurrencyCode) }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="report-card">
+          <div class="report-card-header">
+            <div>
+              <h3>Repeat merchants</h3>
+              <p>Places that keep showing up during the month.</p>
+            </div>
+          </div>
+
+          <div class="report-list" *ngIf="reportRecurringMerchants().length; else noRecurringMerchants">
+            <div class="report-list-row" *ngFor="let merchant of reportRecurringMerchants()">
+              <div>
+                <strong>{{ merchant.merchantName }}</strong>
+                <small>{{ merchant.expenseCount }} visits</small>
+              </div>
+              <strong>{{ formatMoney(merchant.totalAmount, settings().defaultCurrencyCode) }}</strong>
+            </div>
+          </div>
+          <ng-template #noRecurringMerchants>
+            <div class="empty-state compact-empty-state">No repeat merchants in the selected range yet.</div>
+          </ng-template>
+        </article>
+      </div>
+
+      <ng-template #emptyReportState>
+        <div class="empty-state">No expenses match this report month and day filter.</div>
+      </ng-template>
+    </section>
+
+    <section class="expense-panel settings-panel" *ngIf="isActiveSection('settings')">
+      <div class="panel-heading">
+        <h2>Agent Settings</h2>
+        <p>Select the model used for receipt extraction and manage classification groups.</p>
+      </div>
+
+      <div class="form-grid two-column">
+        <label class="field-block">
+          <span>Receipt model</span>
+          <select [ngModel]="settings().modelKey ?? ''" (ngModelChange)="updateSettingsField('modelKey', $event || null)">
+            <option value="">Use default model</option>
+            <option *ngFor="let model of availableModels()" [value]="model.key">
+              {{ model.name }} · {{ model.providerName }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field-block">
+          <span>Default currency</span>
+          <input type="text" maxlength="3" [ngModel]="settings().defaultCurrencyCode" (ngModelChange)="updateSettingsField('defaultCurrencyCode', ($event || '').toUpperCase())" />
+        </label>
+      </div>
+
+      <label class="field-block">
+        <span>Extra extraction guidance</span>
+        <textarea rows="4" [ngModel]="settings().extractionPrompt" (ngModelChange)="updateSettingsField('extractionPrompt', $event)" placeholder="Optional extra instructions for the receipt classifier"></textarea>
+      </label>
+
+      <div class="group-settings-header">
+        <h3>Classification groups</h3>
+        <button class="secondary-button" type="button" (click)="addGroup()">Add Group</button>
+      </div>
+
+      <div class="settings-group-card" *ngFor="let group of editableGroups(); let i = index; trackBy: trackByGroupId">
+        <div class="form-grid four-column">
+          <label class="field-block">
+            <span>Name</span>
+            <input type="text" [ngModel]="group.name" (ngModelChange)="updateGroupField(i, 'name', $event)" placeholder="Groceries" />
+          </label>
+
+          <label class="field-block">
+            <span>Key</span>
+            <input type="text" [ngModel]="group.key" (ngModelChange)="updateGroupField(i, 'key', $event)" placeholder="groceries" />
+          </label>
+
+          <label class="field-block">
+            <span>Color</span>
+            <input type="color" [ngModel]="group.color" (ngModelChange)="updateGroupField(i, 'color', $event)" />
+          </label>
+
+          <label class="field-block inline-toggle">
+            <span>Enabled</span>
+            <input type="checkbox" [ngModel]="group.isEnabled" (ngModelChange)="updateGroupField(i, 'isEnabled', !!$event)" />
+          </label>
+        </div>
+
+        <button class="danger-button" type="button" (click)="removeGroup(i)">Remove</button>
+      </div>
+
+      <div class="panel-actions">
+        <button class="action-button" type="button" (click)="saveSettings()" [disabled]="savingSettings()">Save Expense Settings</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="expense-detail-overlay" *ngIf="selectedExpenseDetail() as detail">
+    <div class="expense-detail-backdrop" (click)="closeExpenseDetail()"></div>
+    <section class="expense-detail-modal">
+      <div class="expense-detail-header">
+        <div>
+          <h2>Edit Expense</h2>
+          <p>Review the receipt data, adjust fields, and save changes.</p>
+        </div>
+        <button class="ghost-button close-button" type="button" (click)="closeExpenseDetail()">Close</button>
+      </div>
+
+      <div class="request-feedback expense-detail-feedback" *ngIf="detailFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
+        <strong>
+          {{ feedback.tone === 'pending' ? 'Working...' : feedback.tone === 'success' ? 'Completed' : 'Action failed' }}
+        </strong>
+        <span>{{ feedback.message }}</span>
+      </div>
+
+      <div class="expense-detail-grid">
+        <div class="expense-detail-card">
+          <h3>Receipt</h3>
+          <img *ngIf="detail.receiptImageDataUrl" [src]="detail.receiptImageDataUrl" alt="Receipt image" class="receipt-preview-image" />
+          <div class="receipt-empty" *ngIf="!detail.receiptImageDataUrl">No receipt image was stored for this expense.</div>
+
+          <div class="receipt-items" *ngIf="detail.items?.length">
+            <h3>Purchased items</h3>
+            <div class="receipt-item-row" *ngFor="let item of detail.items">
+              <span><strong>{{ item.canonicalName || item.name }}</strong><small *ngIf="item.name !== item.canonicalName">Receipt: {{ item.name }}</small><small *ngIf="item.quantity">{{ item.quantity }} {{ item.unit || '' }}</small></span>
+              <strong>{{ formatMoney(item.totalPrice, detail.expense.currencyCode) }}</strong>
+            </div>
+          </div>
+
+          <label class="field-block">
+            <span>Receipt text</span>
+            <textarea rows="7" [ngModel]="editingExpenseForm().receiptText" (ngModelChange)="updateExpenseDetailField('receiptText', $event)"></textarea>
+          </label>
+
+          <label class="field-block" *ngIf="detail.rawExtractionJson">
+            <span>Raw model output</span>
+            <textarea rows="7" [value]="detail.rawExtractionJson" readonly></textarea>
+          </label>
+        </div>
+
+        <div class="expense-detail-card">
+          <h3>Expense details</h3>
+
+          <div class="form-grid two-column">
+            <label class="field-block">
+              <span>Classification group</span>
+              <select [ngModel]="editingExpenseForm().expenseGroupId ?? ''" (ngModelChange)="updateExpenseDetailField('expenseGroupId', $event ? +$event : null)">
+                <option value="">Unclassified</option>
+                <option *ngFor="let group of expenseGroups(); trackBy: trackByGroupId" [value]="group.id">{{ group.name }}</option>
+              </select>
+            </label>
+
+            <label class="field-block">
+              <span>Date</span>
+              <input type="date" [ngModel]="editingExpenseForm().expenseDate" (ngModelChange)="updateExpenseDetailField('expenseDate', $event)" />
+            </label>
+          </div>
+
+          <div class="form-grid four-column">
+            <label class="field-block">
+              <span>Total</span>
+              <input type="number" min="0" step="0.01" [ngModel]="editingExpenseForm().totalAmount" (ngModelChange)="updateExpenseDetailField('totalAmount', $event)" />
+            </label>
+            <label class="field-block">
+              <span>Subtotal</span>
+              <input type="number" min="0" step="0.01" [ngModel]="editingExpenseForm().subtotalAmount" (ngModelChange)="updateExpenseDetailField('subtotalAmount', $event)" />
+            </label>
+            <label class="field-block">
+              <span>Tax</span>
+              <input type="number" min="0" step="0.01" [ngModel]="editingExpenseForm().taxAmount" (ngModelChange)="updateExpenseDetailField('taxAmount', $event)" />
+            </label>
+            <label class="field-block">
+              <span>Tip</span>
+              <input type="number" min="0" step="0.01" [ngModel]="editingExpenseForm().tipAmount" (ngModelChange)="updateExpenseDetailField('tipAmount', $event)" />
+            </label>
+          </div>
+
+          <div class="form-grid two-column">
+            <label class="field-block">
+              <span>Merchant</span>
+              <input type="text" [ngModel]="editingExpenseForm().merchantName" (ngModelChange)="updateExpenseDetailField('merchantName', $event)" />
+            </label>
+            <label class="field-block">
+              <span>Location</span>
+              <input type="text" [ngModel]="editingExpenseForm().location" (ngModelChange)="updateExpenseDetailField('location', $event)" />
+            </label>
+          </div>
+
+          <div class="form-grid three-column">
+            <label class="field-block">
+              <span>Currency</span>
+              <input type="text" maxlength="3" [ngModel]="editingExpenseForm().currencyCode" (ngModelChange)="updateExpenseDetailField('currencyCode', ($event || '').toUpperCase())" />
+            </label>
+            <label class="field-block">
+              <span>Payment method</span>
+              <input type="text" [ngModel]="editingExpenseForm().paymentMethod" (ngModelChange)="updateExpenseDetailField('paymentMethod', $event)" />
+            </label>
+            <label class="field-block">
+              <span>Description</span>
+              <input type="text" [ngModel]="editingExpenseForm().description" (ngModelChange)="updateExpenseDetailField('description', $event)" />
+            </label>
+          </div>
+
+          <div class="form-grid two-column">
+            <div class="field-block">
+              <span>Work expense</span>
+              <label>
+                <input type="checkbox" [ngModel]="editingExpenseForm().isWorkExpense" (ngModelChange)="updateExpenseDetailField('isWorkExpense', !!$event)" />
+                <span>Mark this expense as work-related</span>
+              </label>
+            </div>
+
+            <div class="field-block">
+              <span>Reimbursement</span>
+              <label>
+                <input type="checkbox" [ngModel]="editingExpenseForm().isReimbursable" (ngModelChange)="updateExpenseDetailField('isReimbursable', !!$event)" />
+                <span>Expect reimbursement for this expense</span>
+              </label>
+            </div>
+          </div>
+
+          <label class="field-block">
+            <span>Notes</span>
+            <textarea rows="4" [ngModel]="editingExpenseForm().notes" (ngModelChange)="updateExpenseDetailField('notes', $event)"></textarea>
+          </label>
+
+          <div class="expense-detail-actions">
+            <button class="secondary-button" type="button" (click)="closeExpenseDetail()">Cancel</button>
+            <button class="action-button" type="button" (click)="saveExpenseDetail()" [disabled]="savingExpenseDetail() || loadingExpenseDetail()">
+              {{ savingExpenseDetail() ? 'Saving Changes...' : 'Save Changes' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="expense-detail-overlay" *ngIf="selectedReportGroup() as reportGroup">
+    <div class="expense-detail-backdrop" (click)="closeReportGroup()"></div>
+    <section class="expense-detail-modal report-group-modal">
+      <div class="expense-detail-header">
+        <div>
+          <h2>Category Purchases</h2>
+          <p>{{ reportMonthLabel() }} · {{ reportRangeLabel() }}</p>
+        </div>
+        <button class="ghost-button close-button" type="button" (click)="closeReportGroup()">Close</button>
+      </div>
+
+      <div class="report-group-summary">
+        <span class="group-pill" [style.border-color]="reportGroup.color" [style.color]="reportGroup.color">{{ reportGroup.name }}</span>
+        <strong>{{ formatMoney(reportGroupTotal(), settings().defaultCurrencyCode) }}</strong>
+        <span>{{ reportGroupExpenses().length }} items</span>
+      </div>
+
+      <div class="report-list" *ngIf="reportGroupExpenses().length; else emptyReportGroupState">
+        <div class="report-list-row report-drilldown-row" *ngFor="let expense of reportGroupExpenses()">
+          <div>
+            <strong>{{ expense.merchantName || 'Unknown merchant' }}</strong>
+            <small>{{ expense.expenseDate }} · {{ sourceLabel(expense.sourceType) }}</small>
+            <small>{{ expense.description || expense.notes || expense.location || 'No extra details' }}</small>
+          </div>
+          <div class="report-drilldown-amount">
+            <strong>{{ formatMoney(expense.totalAmount, expense.currencyCode) }}</strong>
+            <small>{{ expense.paymentMethod || 'No payment method' }}</small>
+          </div>
+        </div>
+      </div>
+
+      <ng-template #emptyReportGroupState>
+        <div class="empty-state">No purchases were found for this category in the selected report range.</div>
+      </ng-template>
+    </section>
+  </div>
+</div>
+
+<div class="expense-detail-overlay" *ngIf="fetchImportDialogOpen()">
+  <button class="expense-detail-backdrop" type="button" aria-label="Close fetch import dialog" (click)="closeFetchImportDialog()"></button>
+  <section class="expense-detail-modal fetch-import-modal" aria-modal="true" role="dialog" aria-labelledby="fetchImportTitle">
+    <div class="expense-detail-header">
+      <div>
+        <h2 id="fetchImportTitle">Paste Fetch Import</h2>
+        <p>Paste the full copied <code>fetch(...)</code> snippet from your browser. We’ll run it, classify the rows in batches, and import them like the CSV flow.</p>
+      </div>
+      <button class="secondary-button" type="button" (click)="closeFetchImportDialog()" [disabled]="importingFetch()">Close</button>
+    </div>
+
+    <label class="field-block">
+      <span>Fetch request</span>
+      <textarea
+        class="fetch-import-textarea"
+        rows="12"
+        [ngModel]="fetchImportRequestText()"
+        (ngModelChange)="setFetchImportRequestText($event)"
+        placeholder='Paste the copied fetch("https://...", { ... }) request here'></textarea>
+    </label>
+
+    <div class="request-feedback" *ngIf="fetchImportFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
+      <strong>
+        {{ feedback.tone === 'pending' ? 'Working...' : feedback.tone === 'success' ? 'Completed' : 'Action failed' }}
+      </strong>
+      <span>{{ feedback.message }}</span>
+    </div>
+
+    <div class="expense-detail-actions">
+      <span class="table-secondary">Negative spend rows are imported as expenses. The latest report stays available in History.</span>
+      <button class="action-button" type="button" (click)="importFetch()" [disabled]="importingFetch()">
+        {{ importingFetch() ? 'Executing Fetch Import...' : 'Execute Fetch Import' }}
+      </button>
+    </div>
+
+    <div class="expense-panel import-report-panel fetch-import-report" *ngIf="showFetchImportReport() && csvImportReport() as report">
+      <div class="panel-heading import-report-heading">
+        <div>
+          <h2>Latest Import Report</h2>
+          <p>{{ report.schemaDisplayName }} detected. {{ report.addedCount }} added, {{ report.duplicateCount }} duplicates skipped, {{ report.reviewCount }} need review, {{ report.failedCount }} failed.</p>
+        </div>
+        <div class="capture-mode-chip-row">
+          <span class="capture-mode-chip">{{ report.totalRows }} rows</span>
+          <span class="capture-mode-chip">{{ report.schemaKey }}</span>
+          <span class="capture-mode-chip" *ngIf="report.reviewCount">{{ report.reviewCount }} review</span>
+        </div>
+      </div>
+
+      <div class="request-feedback request-feedback-pending" *ngIf="report.reviewCount">
+        <strong>Approval needed</strong>
+        <span>{{ pendingReviewItemsCount(report) }} row{{ pendingReviewItemsCount(report) === 1 ? '' : 's' }} look like possible duplicates on nearby dates. Review rows stay out of the database until you approve them.</span>
+      </div>
+
+      <div class="csv-import-actions import-review-actions" *ngIf="report.reviewCount">
+        <button class="action-button" type="button" (click)="approveSelectedImportRows()" [disabled]="approvingImportRows() || !selectedReviewItemsCount(report)">
+          {{ approvingImportRows() ? 'Approving...' : 'Approve Selected Review Rows' }}
+        </button>
+        <span class="table-secondary">{{ selectedReviewItemsCount(report) }} selected</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Approve</th>
+              <th>Row</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Merchant</th>
+              <th>Amount</th>
+              <th>Group</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of report.items">
+              <td>
+                <input
+                  *ngIf="item.status === 'review' && item.approvalPayload"
+                  type="checkbox"
+                  [checked]="isImportApprovalSelected(item.approvalPayload)"
+                  (change)="toggleImportApprovalSelection(item.approvalPayload, $any($event.target).checked)" />
+              </td>
+              <td>{{ item.rowNumber }}</td>
+              <td class="table-primary">{{ importStatusLabel(item.status) }}</td>
+              <td>{{ item.expenseDate || 'N/A' }}</td>
+              <td>
+                <div class="table-primary">{{ item.merchantName || item.rawColumns?.['details'] || 'Unknown' }}</div>
+                <div class="table-secondary" *ngIf="item.expense?.sourceType">{{ sourceLabel(item.expense?.sourceType || '') }}</div>
+                <div class="table-secondary" *ngIf="item.status === 'review' && item.expense">Possible match: {{ item.expense.merchantName || 'Existing expense' }} on {{ item.expense.expenseDate }}</div>
+              </td>
+              <td>{{ formatMoney(item.amount, item.currencyCode || settings().defaultCurrencyCode) }}</td>
+              <td>{{ item.expenseGroupName || item.expense?.expenseGroupName || 'Unclassified' }}</td>
+              <td>{{ item.message || 'Imported successfully.' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>

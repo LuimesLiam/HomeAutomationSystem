@@ -1,0 +1,138 @@
+<div class="movies-table-container">
+  <header class="table-header">
+    <h1 class="page-title">Movie Library</h1>
+    <input
+      pInputText
+      class="search-field"
+      type="text"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="applyFilter($event)"
+      placeholder="Search movies..." />
+  </header>
+
+  <div class="loading-container" *ngIf="isLoading()">
+    <p-progressspinner ariaLabel="Loading movies"></p-progressspinner>
+    <p class="loading-text">Loading movies...</p>
+  </div>
+
+  <div class="error-container" *ngIf="error() && !isLoading()">
+    <div class="error-icon">⚠️</div>
+    <p class="error-message">{{ error() }}</p>
+    <button pButton type="button" label="Try Again" (click)="retry()"></button>
+  </div>
+
+  <div class="table-wrapper" *ngIf="!isLoading() && !error()">
+    <p-table [value]="pagedMovies()" [tableStyle]="{ 'min-width': '68rem' }" responsiveLayout="scroll">
+      <ng-template pTemplate="header">
+        <tr>
+          <th></th>
+          <th>Title</th>
+          <th>Year</th>
+          <th>Genre</th>
+          <th>Watched</th>
+          <th>Actions</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-movie>
+        <tr>
+          <td>
+            <img
+              [src]="movie.thumbnail || placeholderImage"
+              [alt]="movie.title"
+              class="movie-thumb"
+              (error)="onImageError($event)"
+              loading="lazy" />
+          </td>
+          <td><span class="movie-title">{{ movie.title }}</span></td>
+          <td><span class="movie-year">{{ movie.year || '—' }}</span></td>
+          <td><span class="movie-genre">{{ movie.genre || '—' }}</span></td>
+          <td>
+            <span class="movie-watched" *ngIf="movie.watched">✓</span>
+          </td>
+          <td>
+            <button pButton type="button" icon="pi pi-play" class="p-button-text" (click)="openOverlay(movie)"></button>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td [attr.colspan]="displayedColumns.length" class="no-data-cell">
+            <div class="no-results">
+              <span class="no-results-icon">🔍</span>
+              <p>No movies found matching your search.</p>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+
+    <p-paginator
+      [rows]="pageSize()"
+      [first]="pageIndex() * pageSize()"
+      [totalRecords]="totalRecords()"
+      [rowsPerPageOptions]="pageSizeOptions"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="{first}-{last} of {totalRecords}"
+      (onPageChange)="onPageChange($event)">
+    </p-paginator>
+  </div>
+
+  <div class="overlay" *ngIf="showOverlay()" (click)="closeOverlay()">
+    <div class="overlay-modal" (click)="$event.stopPropagation()">
+      <button class="close-btn" (click)="closeOverlay()" aria-label="Close">×</button>
+
+      <div class="modal-header">
+        <img
+          [src]="selectedRow()?.thumbnail || placeholderImage"
+          [alt]="selectedRow()?.title"
+          class="modal-poster"
+          (error)="onImageError($event)" />
+        <div class="modal-info">
+          <h2 class="modal-title">{{ selectedRow()?.title }}</h2>
+          <p class="modal-meta" *ngIf="selectedRow()?.year || selectedRow()?.genre">
+            {{ selectedRow()?.year }} <span *ngIf="selectedRow()?.year && selectedRow()?.genre">•</span> {{ selectedRow()?.genre }}
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <ng-container *ngIf="!isEditing(); else editForm">
+          <button class="action-btn primary" (click)="openOnWebsite(selectedRow()!)">Play in Browser</button>
+          <button class="action-btn" (click)="playOnTv(selectedRow()!)">Play on TV</button>
+          <button class="action-btn" (click)="displayUrl(selectedRow()!)">Display URL</button>
+          <button class="action-btn" (click)="startEdit()" [disabled]="!selectedRow()?.id">Edit Details</button>
+        </ng-container>
+        <ng-template #editForm>
+          <div class="edit-form">
+            <label class="edit-label">
+              Title
+              <input class="edit-input" [(ngModel)]="editModel.title" placeholder="Title" />
+            </label>
+            <label class="edit-label">
+              Year
+              <input class="edit-input" [(ngModel)]="editModel.year" placeholder="Year" />
+            </label>
+            <label class="edit-label">
+              Genre
+              <input class="edit-input" [(ngModel)]="editModel.genre" placeholder="Genre" />
+            </label>
+            <label class="edit-label">
+              Description
+              <textarea class="edit-textarea" rows="4" [(ngModel)]="editModel.description" placeholder="Description"></textarea>
+            </label>
+            <p class="edit-error" *ngIf="editError()">{{ editError() }}</p>
+            <div class="edit-actions">
+              <button class="action-btn primary" (click)="saveEdit()" [disabled]="editSaving()">
+                {{ editSaving() ? 'Saving...' : 'Save Changes' }}
+              </button>
+              <button class="action-btn" (click)="resyncMovie()" [disabled]="editSyncing()">
+                {{ editSyncing() ? 'Resyncing...' : 'Resync from OMDB' }}
+              </button>
+              <button class="action-btn" (click)="cancelEdit()">Back</button>
+            </div>
+          </div>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+</div>

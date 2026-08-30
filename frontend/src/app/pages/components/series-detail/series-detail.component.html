@@ -1,0 +1,130 @@
+<div class="overlay" (click)="onClose()">
+  <div class="detail-modal" (click)="$event.stopPropagation()">
+    <!-- Close Button -->
+    <button class="close-btn" (click)="onClose()" aria-label="Close">
+      <span>×</span>
+    </button>
+
+    <!-- Hero Section with Series Info -->
+    <header class="series-hero">
+      <div class="hero-backdrop" [style.backgroundImage]="'url(' + series.thumbnail + ')'"></div>
+      <div class="hero-gradient"></div>
+      
+      <div class="hero-content">
+        <img 
+          [src]="series.thumbnail || placeholderImage" 
+          [alt]="series.title"
+          class="series-poster"
+          (error)="onImageError($event)" />
+        
+        <div class="series-meta">
+          <h1 class="series-title">{{ series.title }}</h1>
+          <p class="series-description" *ngIf="series.description">{{ series.description }}</p>
+          <p class="series-genre" *ngIf="series.genre">{{ series.genre }}</p>
+          
+          <div class="series-stats">
+            <span class="stat">{{ getSeasonNumbers().length }} Season{{ getSeasonNumbers().length !== 1 ? 's' : '' }}</span>
+          </div>
+          
+          <div class="action-buttons">
+            <button class="btn-expand" (click)="expandAll()">Expand All</button>
+            <button class="btn-collapse" (click)="collapseAll()">Collapse All</button>
+            <button class="btn-edit" (click)="startEdit()" [disabled]="!series.id">Edit Details</button>
+          </div>
+
+          <div class="edit-panel" *ngIf="isEditing">
+            <label class="edit-label">
+              Title
+              <input class="edit-input" [(ngModel)]="editModel.title" placeholder="Title" />
+            </label>
+            <label class="edit-label">
+              Genre
+              <input class="edit-input" [(ngModel)]="editModel.genre" placeholder="Genre" />
+            </label>
+            <label class="edit-label">
+              Description
+              <textarea class="edit-textarea" rows="4" [(ngModel)]="editModel.description" placeholder="Description"></textarea>
+            </label>
+            <p class="edit-error" *ngIf="editError">{{ editError }}</p>
+            <div class="edit-actions">
+              <button class="btn-edit primary" (click)="saveSeries()" [disabled]="editSaving">
+                {{ editSaving ? 'Saving...' : 'Save Changes' }}
+              </button>
+              <button class="btn-edit" (click)="resyncSeries()" [disabled]="editSyncing">
+                {{ editSyncing ? 'Resyncing...' : 'Resync from OMDB' }}
+              </button>
+              <button class="btn-edit" (click)="cancelEdit()">Back</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Seasons & Episodes -->
+    <section class="seasons-section">
+      <div *ngIf="loading" class="episodes-loading">Loading episodes...</div>
+      <div *ngIf="!loading && getSeasonNumbers().length === 0" class="episodes-empty">No episodes found.</div>
+      <div 
+        *ngFor="let seasonNum of getSeasonNumbers(); trackBy: trackBySeason" 
+        class="season-accordion">
+        
+        <button 
+          class="season-header"
+          [class.active]="isSeasonOpen(seasonNum)"
+          (click)="toggleSeason(seasonNum)"
+          [attr.aria-expanded]="isSeasonOpen(seasonNum)">
+          <div class="season-info">
+            <h3 class="season-title">Season {{ seasonNum }}</h3>
+            <span class="episode-count">{{ getEpisodeCount(seasonNum) }} episodes</span>
+          </div>
+          <div class="season-actions">
+            <button 
+              class="btn-season-sync"
+              (click)="resyncSeason(seasonNum, $event)"
+              [disabled]="!series.id || isSeasonSyncing(seasonNum)"
+              [attr.aria-label]="'Resync Season ' + seasonNum + ' from OMDB'">
+              {{ isSeasonSyncing(seasonNum) ? 'Resyncing...' : 'Resync Season' }}
+            </button>
+            <span class="chevron" [class.rotated]="isSeasonOpen(seasonNum)">›</span>
+          </div>
+        </button>
+        
+        <div 
+          class="episodes-grid" 
+          *ngIf="isSeasonOpen(seasonNum)"
+          [@.disabled]="true">
+          
+          <article 
+            class="episode-card" 
+            *ngFor="let ep of getSeasonEpisodes(seasonNum); trackBy: trackByEpisode"
+            (click)="onPlay(ep)"
+            (keydown.enter)="onPlay(ep)"
+            tabindex="0"
+            role="button"
+            [class.watched]="ep.watched"
+            [attr.aria-label]="'Play Episode ' + ep.episodeNumber + ': ' + ep.title">
+            
+            <div class="episode-thumbnail-wrapper">
+              <img 
+                [src]="ep.thumbnail || series.thumbnail || placeholderImage" 
+                [alt]="ep.title"
+                class="episode-thumbnail"
+                loading="lazy"
+                (error)="onImageError($event)" />
+              <div class="play-overlay">
+                <span class="play-icon">▶</span>
+              </div>
+              <span class="episode-number">E{{ ep.episodeNumber }}</span>
+              <span class="episode-watched-badge" *ngIf="ep.watched" title="Watched">✓</span>
+            </div>
+            
+            <div class="episode-info">
+              <h4 class="episode-title">{{ ep.title }}</h4>
+              <p class="episode-description" *ngIf="ep.description">{{ ep.description }}</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+title = "HomeApp secret scanning configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "discord-webhook-url"
+description = "Discord webhook URL"
+regex = '''https://(?:canary\.|ptb\.)?discord(?:app)?\.com/api/webhooks/[0-9]{17,20}/[A-Za-z0-9._-]{60,}'''
+keywords = ["discord.com/api/webhooks", "discordapp.com/api/webhooks"]
+tags = ["webhook", "discord"]

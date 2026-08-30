@@ -1,0 +1,2 @@
+<app-series-list [shows]="shows" [loadedGenres]="loadedGenres" (loadGenre)="loadGenre($event)" (seriesSelected)="onSeriesSelected($event)" *ngIf="!selectedSeries"></app-series-list>
+<app-series-detail [series]="selectedSeries" [loading]="isSeriesLoading" (close)="onCloseDetail()" (play)="onPlay($event)" *ngIf="selectedSeries"></app-series-detail>

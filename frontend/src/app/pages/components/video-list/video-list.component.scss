@@ -1,0 +1,28 @@
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  
+  .video-item {
+    text-align: center;
+    cursor: pointer;
+  }
+  
+  .video-thumbnail {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
+  
+  .video-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  video {
+    width: 80%;
+    max-width: 800px;
+  }
+  

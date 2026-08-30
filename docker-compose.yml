@@ -1,0 +1,151 @@
+services:
+  app:
+    image: "${APP_IMAGE_REF:-${APP_IMAGE:-${APP_IMAGE_REPOSITORY:-ghcr.io/your-user/homeapp}:${IMAGE_TAG:-latest}}}"
+    pull_policy: "${APP_PULL_POLICY:-missing}"
+    restart: unless-stopped
+    env_file:
+      - "${APP_ENV_FILE:-.env}"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Production}"
+      ASPNETCORE_URLS: "${ASPNETCORE_URLS:-http://0.0.0.0:5000}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4317}"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL:-grpc}"
+    ports:
+      - "${APP_BIND_IP:-0.0.0.0}:${APP_PORT:-5000}:5000"
+    volumes:
+      - "${WORKSPACES_HOST_PATH:-../..}:/workspaces:${WORKSPACES_MOUNT_MODE:-cached}"
+      - "${MEDIA_SOURCE_PATH:-./media}:/mnt/movies:${MEDIA_MOUNT_MODE:-ro}"
+      - "${DOCUMENT_SOURCE_PATH:-./documents}:/mnt/document:${DOCUMENT_MOUNT_MODE:-rw}"
+      - "${RECORDED_VIDEO_HOST_PATH:-./recorded_videos}:/workspaces/HomeApp/recorded_videos:${RECORDED_VIDEO_MOUNT_MODE:-rw}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  postgres:
+    image: "postgres:${POSTGRES_IMAGE_TAG:-14.3}"
+    container_name: "${POSTGRES_CONTAINER_NAME:-postgres-prod}"
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    env_file:
+      - "${APP_ENV_FILE:-.env}"
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - backend
+
+  pgadmin:
+    image: "dpage/pgadmin4:${PGADMIN_IMAGE_TAG:-latest}"
+    container_name: "${PGADMIN_CONTAINER_NAME:-pgadmin-prod}"
+    restart: unless-stopped
+    volumes:
+      - "${PGADMIN_PREFERENCES_PATH:-./.devcontainer/database/pgAdminPreferences.json}:/pgadmin4/preferences.json:ro"
+      - "${PGADMIN_SERVERS_PATH:-./.devcontainer/database/pgAdminServers.json}:/pgadmin4/servers.json:ro"
+    env_file:
+      - "${APP_ENV_FILE:-.env}"
+    environment:
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD}"
+    depends_on:
+      - postgres
+    ports:
+      - "${PGADMIN_PORT:-15435}:80"
+    networks:
+      - backend
+
+  prometheus:
+    image: "prom/prometheus:${PROMETHEUS_IMAGE_TAG:-latest}"
+    container_name: "${PROMETHEUS_CONTAINER_NAME:-prometheus-prod}"
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - "${PROMETHEUS_CONFIG_PATH:-./monitoring/prometheus/prometheus.yml}:/etc/prometheus/prometheus.yml:ro"
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - loki
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+
+  loki:
+    image: "grafana/loki:${LOKI_IMAGE_TAG:-3.4.2}"
+    container_name: "${LOKI_CONTAINER_NAME:-loki-prod}"
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - "${LOKI_CONFIG_PATH:-./monitoring/loki/config.yml}:/etc/loki/config.yml:ro"
+      - loki-data:/loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    networks:
+      - backend
+
+  grafana:
+    image: "grafana/grafana:${GRAFANA_IMAGE_TAG:-latest}"
+    container_name: "${GRAFANA_CONTAINER_NAME:-grafana-prod}"
+    restart: unless-stopped
+    env_file:
+      - "${APP_ENV_FILE:-.env}"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - "${GRAFANA_PROVISIONING_PATH:-./monitoring/grafana/provisioning}:/etc/grafana/provisioning:ro"
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - backend
+
+  jaeger:
+    image: "jaegertracing/all-in-one:${JAEGER_IMAGE_TAG:-1.62.0}"
+    container_name: "${JAEGER_CONTAINER_NAME:-jaeger-prod}"
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
+      - "${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+    name: "${POSTGRES_VOLUME:-homeapp-postgres-data}"
+  prometheus-data:
+    name: "${PROMETHEUS_VOLUME:-homeapp-prometheus-data}"
+  loki-data:
+    name: "${LOKI_VOLUME:-homeapp-loki-data}"
+  grafana-data:
+    name: "${GRAFANA_VOLUME:-homeapp-grafana-data}"
+
+networks:
+  backend:
+    driver: bridge

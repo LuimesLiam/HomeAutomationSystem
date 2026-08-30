@@ -1,0 +1,88 @@
+<div class="chat-page">
+  <div class="chat-header">
+    <div>
+      <h1 class="page-title">AI Chat</h1>
+      <p class="page-subtitle">Stream replies, keep persisted sessions, and render markdown responses from any configured model.</p>
+    </div>
+
+    <div class="chat-actions">
+      <button class="secondary-button" type="button" (click)="startFreshChat()">New Chat</button>
+      <button class="secondary-button" type="button" (click)="loadSessions()" [disabled]="loadingSessions()">Refresh Sessions</button>
+    </div>
+  </div>
+
+  <div class="chat-toolbar">
+    <label class="field-block">
+      <span class="field-label">Model</span>
+      <select
+        class="chat-select"
+        [ngModel]="selectedModelKey()"
+        (ngModelChange)="selectedModelKey.set($event)"
+        [disabled]="loadingModels() || sending()">
+        <option value="" disabled>Select a model</option>
+        <option *ngFor="let model of models(); trackBy: trackByModel" [ngValue]="model.key">
+          {{ model.name }} ({{ model.providerKey }})
+        </option>
+      </select>
+    </label>
+
+    <div class="toolbar-note" *ngIf="loadingModels() || loadingSessions() || loadingSessionDetail()">Loading chat data...</div>
+    <div class="toolbar-note error" *ngIf="errorMessage()">{{ errorMessage() }}</div>
+  </div>
+
+  <div class="chat-layout">
+    <aside class="session-list">
+      <div class="session-list-header">
+        <h2>Sessions</h2>
+      </div>
+
+      <button
+        class="session-item"
+        type="button"
+        *ngFor="let session of sessions(); trackBy: trackBySession"
+        [class.active]="selectedSessionId() === session.id"
+        (click)="openSession(session.id)">
+        <strong>{{ session.title }}</strong>
+        <span>{{ session.modelKey }}</span>
+      </button>
+    </aside>
+
+    <div class="chat-shell">
+      <div class="chat-log">
+        <div class="chat-bubble" *ngFor="let message of messages(); trackBy: trackByMessage" [class.user]="message.role === 'user'">
+          <div class="bubble-meta">
+            <strong>{{ message.role === 'user' ? 'You' : 'Assistant' }}</strong>
+            <span>{{ message.timestamp }}</span>
+            <span *ngIf="message.modelLabel">{{ message.modelLabel }}</span>
+          </div>
+          <div class="bubble-content markdown-body" [innerHTML]="message.html"></div>
+        </div>
+
+        <div class="chat-bubble assistant pending" *ngIf="sending()">
+          <div class="bubble-meta">
+            <strong>Assistant</strong>
+            <span>Streaming...</span>
+          </div>
+          <div class="bubble-content markdown-body"><p>Streaming response...</p></div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <textarea
+          class="chat-input"
+          rows="5"
+          [(ngModel)]="draftMessage"
+          [disabled]="sending()"
+          placeholder="Ask anything..."
+          (keydown.enter)="handleComposerKeydown($event)"></textarea>
+
+        <div class="composer-actions">
+          <span class="composer-hint">Press Enter to send, Shift+Enter for a new line.</span>
+          <button class="action-button" type="button" (click)="sendMessage()" [disabled]="sending() || !draftMessage.trim()">
+            {{ sending() ? 'Sending...' : 'Send Message' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

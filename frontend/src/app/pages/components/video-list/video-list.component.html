@@ -1,0 +1,13 @@
+<button (click)="syncMovies()">Re-sync Movies</button>
+
+<div class="video-grid" *ngIf="!selectedVideo()">
+  <div class="video-item" *ngFor="let video of videos()" (click)="playVideo(video.videoUrl)">
+    <img [src]="video.thumbnail" alt="{{ video.name }}" class="video-thumbnail" />
+    <p>{{ video.name }}</p>
+  </div>
+</div>
+
+<div class="video-player" *ngIf="selectedVideo()">
+  <button (click)="closeVideo()">Close</button>
+  <video [src]="selectedVideo()" controls autoplay></video>
+</div>

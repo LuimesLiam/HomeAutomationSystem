@@ -1,0 +1,130 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # devices:
+    #   - /dev/video0:/dev/video0
+    #   - /dev/video1:/dev/video1
+
+    volumes:
+      - ../..:/workspaces:cached
+      # When VS Code opens the devcontainer from WSL, Docker Compose expects a Linux path.
+      - ${MOVIES_HOST_PATH:-/mnt/e/app-movies}:/mnt/movies:cached
+      - recorded_videos:/workspaces/HomeWeb/recorded_videos
+
+    # Add host.docker.internal resolution for Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+    networks:
+      - backend
+    ports:
+      - "4200:4200"
+      - "5000:5000"
+
+    # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
+    #network_mode: service:db
+    
+    # Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+    # user: root
+
+    # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
+    # (Adding the "ports" property to this file will not forward from a Codespace.)
+
+
+  postgres:
+    image: postgres:17.4
+    container_name: postgres
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    # Expose for debugging / host‐side clients if you ever need it
+    ports:
+      - "5432:5432"
+    networks:
+      - backend
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    volumes:
+      - ./database/pgAdminPreferences.json:/pgadmin4/preferences.json
+      - ./database/pgAdminServers.json:/pgadmin4/servers.json
+    environment:
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_DEFAULT_EMAIL: "admin@domain.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    depends_on:
+      - postgres
+    # Expose the pgAdmin web UI on localhost:15432
+    ports:
+      - "15433:80"
+    networks:
+      - backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-dev
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9091:9090"
+    depends_on:
+      - loki
+    networks:
+      - backend
+
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: loki-dev
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./monitoring/loki/config.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "3101:3100"
+    networks:
+      - backend
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-dev
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - backend
+volumes:
+  postgres-data:
+  recorded_videos:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+
+networks:
+  backend:
+    driver: bridge

@@ -1,0 +1,53 @@
+<nav class="sidebar" [class.collapsed]="isCollapsed()" aria-label="Main navigation">
+  <button
+    (click)="toggleSidebar()"
+    class="toggle-button"
+    [attr.aria-expanded]="!isCollapsed()"
+    aria-label="Toggle navigation menu"
+    type="button">
+    <i class="pi" [class.pi-bars]="isCollapsed()" [class.pi-times]="!isCollapsed()"></i>
+  </button>
+
+  <div class="nav-links">
+    <a routerLink="/movie-player" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-play nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">Browse</span>
+    </a>
+
+    <a routerLink="/tv-table" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-video nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">TV Shows</span>
+    </a>
+
+    <a routerLink="/movies-table" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-table nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">Library</span>
+    </a>
+
+    <a routerLink="/web-cam-feed" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-camera nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">Cameras</span>
+    </a>
+
+    <a routerLink="/settings" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-cog nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">Settings</span>
+    </a>
+
+    <a routerLink="/expenses" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-wallet nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">Expenses</span>
+    </a>
+
+    <a routerLink="/ai-chat" routerLinkActive="active" class="nav-item">
+      <i class="pi pi-comments nav-icon" aria-hidden="true"></i>
+      <span class="nav-label">AI Chat</span>
+    </a>
+  </div>
+
+  <div class="nav-footer">
+    <div class="brand-logo" *ngIf="!isCollapsed()">
+      <span class="brand-name">HomeApp</span>
+    </div>
+  </div>
+</nav>

@@ -1,0 +1,529 @@
+<div class="settings-page">
+  <div class="settings-header">
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle">Keep AI provider setup, agent model behavior, and video library controls in their own spaces.</p>
+  </div>
+
+  <div class="settings-section-nav" aria-label="Settings sections">
+    <button
+      class="section-tab"
+      type="button"
+      [class.section-tab-active]="isActiveSection('ai')"
+      (click)="setActiveSection('ai')">
+      AI
+    </button>
+    <button
+      class="section-tab"
+      type="button"
+      [class.section-tab-active]="isActiveSection('agent')"
+      (click)="setActiveSection('agent')">
+      Agent
+    </button>
+    <button
+      class="section-tab"
+      type="button"
+      [class.section-tab-active]="isActiveSection('video')"
+      (click)="setActiveSection('video')">
+      Video
+    </button>
+  </div>
+
+  <div class="settings-grid" *ngIf="isActiveSection('ai')">
+    <section class="settings-card settings-card-wide">
+      <h2 class="card-title">AI Providers</h2>
+      <p class="card-description">Configure provider endpoints, API key environment variable names, and any provider-specific arguments.</p>
+
+      <div class="spinner-row" *ngIf="loadingAiSettings()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Loading AI settings...</span>
+      </div>
+
+      <div class="provider-templates" *ngIf="!loadingAiSettings()">
+        <div class="template-chip" *ngFor="let providerType of aiProviderTypes(); trackBy: trackByProviderType">
+          <strong>{{ providerType.name }}</strong>
+          <span>{{ providerType.description }}</span>
+        </div>
+      </div>
+
+      <div class="ai-section" *ngIf="!loadingAiSettings()">
+        <div class="source-group-header">
+          <label class="limit-label">Providers</label>
+          <button class="secondary-button" type="button" (click)="addAiProvider()">Add Provider</button>
+        </div>
+
+        <div class="ai-provider-card" *ngFor="let provider of aiProviders(); let i = index; trackBy: trackByIndex">
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Provider type</span>
+              <select
+                class="limit-input"
+                [ngModel]="provider.providerType"
+                (ngModelChange)="updateAiProviderField(i, 'providerType', +$event)">
+                <option *ngFor="let providerType of aiProviderTypes(); trackBy: trackByProviderType" [ngValue]="providerType.value">
+                  {{ providerType.name }}
+                </option>
+              </select>
+            </label>
+
+            <label class="field-block inline-toggle">
+              <span class="limit-label">Enabled</span>
+              <input
+                type="checkbox"
+                [ngModel]="provider.isEnabled"
+                (ngModelChange)="updateAiProviderField(i, 'isEnabled', !!$event)" />
+            </label>
+          </div>
+
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Provider key</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="provider.key"
+                (ngModelChange)="updateAiProviderField(i, 'key', $event)"
+                placeholder="openai" />
+            </label>
+
+            <label class="field-block">
+              <span class="limit-label">Display name</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="provider.name"
+                (ngModelChange)="updateAiProviderField(i, 'name', $event)"
+                placeholder="OpenAI" />
+            </label>
+          </div>
+
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Base URL</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="provider.baseUrl"
+                (ngModelChange)="updateAiProviderField(i, 'baseUrl', $event)"
+                placeholder="https://api.openai.com/v1/" />
+            </label>
+
+            <label class="field-block">
+              <span class="limit-label">API key env var name</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="provider.apiKeyEnvironmentVariableName"
+                (ngModelChange)="updateAiProviderField(i, 'apiKeyEnvironmentVariableName', $event)"
+                placeholder="OPENAI_API_KEY" />
+            </label>
+          </div>
+
+          <label class="field-block">
+            <span class="limit-label">Provider args JSON</span>
+            <textarea
+              class="limit-input code-input"
+              rows="3"
+              [ngModel]="provider.configurationJson"
+              (ngModelChange)="updateAiProviderField(i, 'configurationJson', $event)"
+              placeholder='{"organization":"optional"}'></textarea>
+          </label>
+
+          <button class="danger-button align-self-start" type="button" (click)="removeAiProvider(i)">Remove Provider</button>
+        </div>
+      </div>
+
+      <button class="action-button" type="button" (click)="saveAiSettings()" [disabled]="savingAiSettings() || loadingAiSettings()">
+        Save AI Settings
+      </button>
+
+      <div class="spinner-row" *ngIf="savingAiSettings()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Saving AI settings...</span>
+      </div>
+
+      <div class="status-row" *ngIf="aiSettingsMessage()">
+        {{ aiSettingsMessage() }}
+      </div>
+    </section>
+  </div>
+
+  <div class="settings-grid" *ngIf="isActiveSection('agent')">
+    <section class="settings-card settings-card-wide">
+      <h2 class="card-title">Agent Models</h2>
+      <p class="card-description">Choose which provider each agent model uses, tune defaults, and control model-level arguments.</p>
+
+      <div class="spinner-row" *ngIf="loadingAiSettings()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Loading agent settings...</span>
+      </div>
+
+      <div class="ai-section" *ngIf="!loadingAiSettings()">
+        <div class="source-group-header">
+          <label class="limit-label">Models</label>
+          <button class="secondary-button" type="button" (click)="addAiModel()">Add Model</button>
+        </div>
+
+        <div class="ai-provider-card" *ngFor="let model of aiModels(); let i = index; trackBy: trackByIndex">
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Model key</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="model.key"
+                (ngModelChange)="updateAiModelField(i, 'key', $event)"
+                placeholder="openai-gpt-4o-mini" />
+            </label>
+
+            <label class="field-block">
+              <span class="limit-label">Display name</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="model.name"
+                (ngModelChange)="updateAiModelField(i, 'name', $event)"
+                placeholder="GPT-4o mini" />
+            </label>
+          </div>
+
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Provider</span>
+              <select
+                class="limit-input"
+                [ngModel]="model.providerKey"
+                (ngModelChange)="updateAiModelField(i, 'providerKey', $event)">
+                <option *ngFor="let provider of aiProviders(); trackBy: trackByIndex" [ngValue]="provider.key">
+                  {{ provider.name || provider.key }}
+                </option>
+              </select>
+            </label>
+
+            <label class="field-block">
+              <span class="limit-label">Remote model id</span>
+              <input
+                class="limit-input"
+                type="text"
+                [ngModel]="model.modelId"
+                (ngModelChange)="updateAiModelField(i, 'modelId', $event)"
+                placeholder="gpt-4o-mini" />
+            </label>
+          </div>
+
+          <div class="form-row three-column">
+            <label class="field-block inline-toggle">
+              <span class="limit-label">Enabled</span>
+              <input
+                type="checkbox"
+                [ngModel]="model.isEnabled"
+                (ngModelChange)="updateAiModelField(i, 'isEnabled', !!$event)" />
+            </label>
+
+            <label class="field-block inline-toggle">
+              <span class="limit-label">Default</span>
+              <input
+                type="radio"
+                name="defaultModel"
+                [checked]="model.isDefault"
+                (change)="updateAiModelField(i, 'isDefault', true)" />
+            </label>
+
+            <div class="field-block helper-text">
+              <span class="limit-label">Default selection</span>
+              <span>Exactly one enabled model should be the default fallback.</span>
+            </div>
+          </div>
+
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Temperature</span>
+              <input
+                class="limit-input"
+                type="number"
+                min="0"
+                max="2"
+                step="0.1"
+                [ngModel]="model.temperature"
+                (ngModelChange)="updateAiModelField(i, 'temperature', +$event)" />
+            </label>
+
+            <label class="field-block">
+              <span class="limit-label">Max output tokens</span>
+              <input
+                class="limit-input"
+                type="number"
+                min="1"
+                step="1"
+                [ngModel]="model.maxOutputTokens"
+                (ngModelChange)="updateAiModelField(i, 'maxOutputTokens', +$event)" />
+            </label>
+          </div>
+
+          <label class="field-block">
+            <span class="limit-label">Model args JSON</span>
+            <textarea
+              class="limit-input code-input"
+              rows="3"
+              [ngModel]="model.configurationJson"
+              (ngModelChange)="updateAiModelField(i, 'configurationJson', $event)"
+              placeholder='{"reasoning":"balanced"}'></textarea>
+          </label>
+
+          <button class="danger-button align-self-start" type="button" (click)="removeAiModel(i)">Remove Model</button>
+        </div>
+      </div>
+
+      <button class="action-button" type="button" (click)="saveAiSettings()" [disabled]="savingAiSettings() || loadingAiSettings()">
+        Save Agent Settings
+      </button>
+
+      <div class="spinner-row" *ngIf="savingAiSettings()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Saving agent settings...</span>
+      </div>
+
+      <div class="status-row" *ngIf="aiSettingsMessage()">
+        {{ aiSettingsMessage() }}
+      </div>
+    </section>
+  </div>
+
+  <div class="settings-grid" *ngIf="isActiveSection('video')">
+    <section class="settings-card settings-card-wide">
+      <h2 class="card-title">Video Library Sources</h2>
+      <p class="card-description">Add one row per storage location for movies and TV content.</p>
+
+      <div class="spinner-row" *ngIf="loadingSettings()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Loading media source settings...</span>
+      </div>
+
+      <div class="sources-grid" *ngIf="!loadingSettings()">
+        <div class="source-group">
+          <div class="source-group-header">
+            <label class="limit-label">Movie folders</label>
+            <button class="secondary-button" type="button" (click)="addMovieSource()">Add Folder</button>
+          </div>
+
+          <div class="source-row" *ngFor="let source of movieSources(); let i = index; trackBy: trackByIndex">
+            <input
+              class="limit-input"
+              type="text"
+              [name]="'movie-source-' + i"
+              [ngModel]="source.path"
+              (ngModelChange)="updateMovieSourcePath(i, $event)"
+              placeholder="/mnt/drive1/Movies" />
+            <button class="danger-button" type="button" (click)="removeMovieSource(i)">Remove</button>
+          </div>
+        </div>
+
+        <div class="source-group">
+          <div class="source-group-header">
+            <label class="limit-label">TV series folders</label>
+            <button class="secondary-button" type="button" (click)="addTvSource()">Add Folder</button>
+          </div>
+
+          <div class="source-row" *ngFor="let source of tvSources(); let i = index; trackBy: trackByIndex">
+            <input
+              class="limit-input"
+              type="text"
+              [name]="'tv-source-' + i"
+              [ngModel]="source.path"
+              (ngModelChange)="updateTvSourcePath(i, $event)"
+              placeholder="/mnt/drive1/TV" />
+            <button class="danger-button" type="button" (click)="removeTvSource(i)">Remove</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="action-button" type="button" (click)="saveMediaSourceSettings()" [disabled]="savingSettings() || loadingSettings()">
+        Save Video Sources
+      </button>
+
+      <div class="spinner-row" *ngIf="savingSettings()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Saving media source settings...</span>
+      </div>
+
+      <div class="status-row" *ngIf="settingsMessage()">
+        {{ settingsMessage() }}
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="card-title">Movie Sync</h2>
+      <p class="card-description">Sync up to the configured limit of unsynced movies.</p>
+
+      <label class="limit-label" for="movie-sync-limit">Max movies to sync</label>
+      <input
+        id="movie-sync-limit"
+        class="limit-input"
+        type="number"
+        min="1"
+        step="1"
+        [ngModel]="movieSyncLimit()"
+        (ngModelChange)="movieSyncLimit.set(+$event)" />
+
+      <button
+        class="action-button"
+        type="button"
+        (click)="syncMovies()"
+        [disabled]="syncingMovies() || !movieCandidatesLoaded() || selectedMoviePaths().size === 0">
+        Add Selected Movies
+      </button>
+      <button
+        class="secondary-button"
+        type="button"
+        (click)="loadMovieCandidates()"
+        [disabled]="loadingMovieCandidates() || syncingMovies()">
+        {{ loadingMovieCandidates() ? 'Scanning...' : 'Review New Movies' }}
+      </button>
+
+      <div class="candidate-picker" *ngIf="movieCandidatesLoaded()">
+        <div class="candidate-summary">
+          <strong>{{ selectedMoviePaths().size }} selected</strong>
+          <span>{{ movieCandidates().length }} new movies found</span>
+        </div>
+        <div class="candidate-toolbar">
+          <input
+            class="limit-input"
+            type="search"
+            placeholder="Search title, year, or path"
+            [ngModel]="movieCandidateSearch()"
+            (ngModelChange)="movieCandidateSearch.set($event)" />
+          <select
+            class="limit-input"
+            aria-label="Order new movies"
+            [ngModel]="movieCandidateSort()"
+            (ngModelChange)="movieCandidateSort.set($event)">
+            <option value="title-asc">Title A–Z</option>
+            <option value="title-desc">Title Z–A</option>
+            <option value="year-desc">Newest year first</option>
+            <option value="year-asc">Oldest year first</option>
+            <option value="path-asc">File path A–Z</option>
+          </select>
+        </div>
+        <div class="candidate-actions">
+          <button class="secondary-button" type="button" (click)="selectAllCandidates('movie')">Select all</button>
+          <button class="secondary-button" type="button" (click)="deselectAllCandidates('movie')">Deselect all</button>
+        </div>
+        <div class="candidate-list" *ngIf="filteredMovieCandidates().length; else noMovieCandidates">
+          <label
+            class="candidate-row"
+            *ngFor="let item of filteredMovieCandidates(); trackBy: trackByCandidatePath">
+            <input
+              type="checkbox"
+              [checked]="isCandidateSelected('movie', item.path)"
+              (change)="setCandidateSelected('movie', item.path, $any($event.target).checked)" />
+            <span class="candidate-copy">
+              <strong>{{ item.title || item.name }}</strong>
+              <span>{{ item.year || 'Year unknown' }} · {{ item.path }}</span>
+            </span>
+          </label>
+        </div>
+        <ng-template #noMovieCandidates>
+          <p class="candidate-empty">No new movies match this search.</p>
+        </ng-template>
+      </div>
+
+      <div class="spinner-row" *ngIf="syncingMovies()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Syncing movies...</span>
+      </div>
+
+      <div class="status-row" *ngIf="movieSyncMessage()">
+        {{ movieSyncMessage() }}
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2 class="card-title">TV Sync</h2>
+      <p class="card-description">Sync up to the configured limit of unsynced episodes.</p>
+
+      <label class="limit-label" for="tv-sync-limit">Max episodes to sync</label>
+      <input
+        id="tv-sync-limit"
+        class="limit-input"
+        type="number"
+        min="1"
+        step="1"
+        [ngModel]="tvSyncLimit()"
+        (ngModelChange)="tvSyncLimit.set(+$event)" />
+
+      <button
+        class="action-button"
+        type="button"
+        (click)="syncTv()"
+        [disabled]="syncingTv() || !tvCandidatesLoaded() || selectedTvPaths().size === 0">
+        Add Selected Episodes
+      </button>
+      <button
+        class="secondary-button"
+        type="button"
+        (click)="loadTvCandidates()"
+        [disabled]="loadingTvCandidates() || syncingTv()">
+        {{ loadingTvCandidates() ? 'Scanning...' : 'Review New TV Episodes' }}
+      </button>
+
+      <div class="candidate-picker" *ngIf="tvCandidatesLoaded()">
+        <div class="candidate-summary">
+          <strong>{{ selectedTvPaths().size }} selected</strong>
+          <span>{{ tvCandidates().length }} new episodes found</span>
+        </div>
+        <div class="candidate-toolbar">
+          <input
+            class="limit-input"
+            type="search"
+            placeholder="Search show, episode, or path"
+            [ngModel]="tvCandidateSearch()"
+            (ngModelChange)="tvCandidateSearch.set($event)" />
+          <select
+            class="limit-input"
+            aria-label="Order new episodes"
+            [ngModel]="tvCandidateSort()"
+            (ngModelChange)="tvCandidateSort.set($event)">
+            <option value="series-asc">Show / episode order</option>
+            <option value="series-desc">Show Z–A</option>
+            <option value="title-asc">Episode title A–Z</option>
+            <option value="title-desc">Episode title Z–A</option>
+            <option value="path-asc">File path A–Z</option>
+          </select>
+        </div>
+        <div class="candidate-actions">
+          <button class="secondary-button" type="button" (click)="selectAllCandidates('tv')">Select all</button>
+          <button class="secondary-button" type="button" (click)="deselectAllCandidates('tv')">Deselect all</button>
+        </div>
+        <div class="candidate-list" *ngIf="filteredTvCandidates().length; else noTvCandidates">
+          <label
+            class="candidate-row"
+            *ngFor="let item of filteredTvCandidates(); trackBy: trackByCandidatePath">
+            <input
+              type="checkbox"
+              [checked]="isCandidateSelected('tv', item.path)"
+              (change)="setCandidateSelected('tv', item.path, $any($event.target).checked)" />
+            <span class="candidate-copy">
+              <strong>{{ item.series }} · S{{ item.season }}E{{ item.episode }}</strong>
+              <span>{{ item.title || item.name }} · {{ item.path }}</span>
+            </span>
+          </label>
+        </div>
+        <ng-template #noTvCandidates>
+          <p class="candidate-empty">No new episodes match this search.</p>
+        </ng-template>
+      </div>
+
+      <div class="spinner-row" *ngIf="syncingTv()">
+        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
+        <span>Syncing episodes...</span>
+      </div>
+
+      <div class="status-row" *ngIf="tvSyncMessage()">
+        {{ tvSyncMessage() }}
+      </div>
+    </section>
+  </div>
+
+  <div class="sync-note">
+    AI settings store provider and model metadata in Postgres, while API keys stay in environment variables only.
+  </div>
+</div>

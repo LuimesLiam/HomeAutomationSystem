@@ -1,0 +1,6 @@
+#opencv-python
+psutil
+python-dotenv
+pyzmq
+opencv-python
+#numpy

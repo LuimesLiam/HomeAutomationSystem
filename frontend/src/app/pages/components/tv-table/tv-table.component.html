@@ -1,0 +1,94 @@
+<div class="tv-table-container">
+  <header class="table-header">
+    <h1 class="page-title">TV Show Library</h1>
+    <input
+      pInputText
+      class="search-field"
+      type="text"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="applyFilter($event)"
+      placeholder="Search series..." />
+  </header>
+
+  <div class="loading-container" *ngIf="isLoading()">
+    <p-progressspinner ariaLabel="Loading series"></p-progressspinner>
+    <p class="loading-text">Loading series...</p>
+  </div>
+
+  <div class="error-container" *ngIf="error() && !isLoading()">
+    <div class="error-icon">⚠️</div>
+    <p class="error-message">{{ error() }}</p>
+    <button pButton type="button" label="Try Again" (click)="retry()"></button>
+  </div>
+
+  <div class="table-wrapper" *ngIf="!isLoading() && !error()">
+    <p-table [value]="pagedSeries()" [tableStyle]="{ 'min-width': '72rem' }" responsiveLayout="scroll">
+      <ng-template pTemplate="header">
+        <tr>
+          <th></th>
+          <th>Series</th>
+          <th>Genre</th>
+          <th>Seasons</th>
+          <th>Episodes</th>
+          <th>Watched</th>
+          <th>Actions</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-item>
+        <tr>
+          <td>
+            <img
+              [src]="item.thumbnail || placeholderImage"
+              [alt]="item.title"
+              class="series-thumb"
+              (error)="onImageError($event)"
+              loading="lazy" />
+          </td>
+          <td>
+            <div class="series-cell">
+              <span class="series-name">{{ item.title || item.name }}</span>
+              <span class="series-description" *ngIf="item.description">{{ item.description }}</span>
+            </div>
+          </td>
+          <td><span class="genre-name">{{ item.genre || 'Unknown' }}</span></td>
+          <td><span class="count-badge">{{ item.seasonCount }}</span></td>
+          <td><span class="count-badge">{{ item.episodeCount }}</span></td>
+          <td>
+            <span class="watched-summary" [class.complete]="item.fullyWatched">{{ formatWatched(item) }}</span>
+          </td>
+          <td>
+            <button pButton type="button" label="Open" class="p-button-outlined p-button-sm" (click)="openSeries(item)"></button>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td [attr.colspan]="displayedColumns.length" class="no-data-cell">
+            <div class="no-results">
+              <span class="no-results-icon">🔍</span>
+              <p>No series found matching your search.</p>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+
+    <p-paginator
+      [rows]="pageSize()"
+      [first]="pageIndex() * pageSize()"
+      [totalRecords]="totalRecords()"
+      [rowsPerPageOptions]="pageSizeOptions"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="{first}-{last} of {totalRecords}"
+      (onPageChange)="onPageChange($event)">
+    </p-paginator>
+  </div>
+
+  <app-series-detail
+    *ngIf="selectedSeries()"
+    [series]="selectedSeries()!"
+    [loading]="isSeriesLoading()"
+    (close)="closeSeriesDetail()"
+    (play)="playEpisode($event)">
+  </app-series-detail>
+</div>

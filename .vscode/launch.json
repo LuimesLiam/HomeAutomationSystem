@@ -1,0 +1,91 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            // Use IntelliSense to find out which attributes exist for C# debugging
+            // Use hover for the description of the existing attributes
+            // For further information visit https://github.com/dotnet/vscode-csharp/blob/main/debugger-launchjson.md.
+            "name": ".NET Core Launch (web)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            // If you have changed target frameworks, make sure to update the program path.
+            "program": "${workspaceFolder}/backend/Core/HomeApp.Host/bin/Debug/net10.0/HomeApp.Host.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/backend/Core/HomeApp.Host",
+            "stopAtEntry": false,
+            // Enable launching a web browser when ASP.NET Core starts. For more information: https://aka.ms/VSCode-CS-LaunchJson-WebBrowser
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://0.0.0.0:5000"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            }
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        },
+        {
+            "name": "Python: CamFeed",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/backend/PythonServices/CamFeed/CamFeed.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Angular: npm start",
+            "type": "pwa-node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/frontend",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["start", "--", "--host", "0.0.0.0"],
+            "console": "integratedTerminal",
+            "restart": true,
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Angular: npm start (Brave Debug)",
+            "type": "pwa-msedge", // Brave is Chromium-based and works with this type
+            "request": "launch",
+            "url": "http://localhost:4200",
+            "webRoot": "${workspaceFolder}/frontend",
+            "cwd": "${workspaceFolder}/frontend",
+            "runtimeExecutable": "/usr/bin/brave-browser", // adjust path if needed
+            "runtimeArgs": ["--remote-debugging-port=9222"],
+            "console": "integratedTerminal",
+            "restart": true,
+            "internalConsoleOptions": "neverOpen"
+        }
+        // If you prefer Firefox, use the following configuration instead:
+        // {
+        //     "name": "Angular: npm start (Firefox Debug)",
+        //     "type": "pwa-firefox",
+        //     "request": "launch",
+        //     "url": "http://localhost:4200",
+        //     "webRoot": "${workspaceFolder}/frontend",
+        //     "cwd": "${workspaceFolder}/frontend",
+        //     "console": "integratedTerminal",
+        //     "restart": true,
+        //     "internalConsoleOptions": "neverOpen"
+        // }
+    ],
+    "compounds": [
+        {
+            "name": "Run All",
+            "configurations": [
+                ".NET Core Launch (web)",
+                "Python: CamFeed",
+                "Angular: npm start",
+                "Angular: npm start (Brave Debug)"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,5 @@
+services:
+  app:
+    devices:
+      - "${VIDEO_DEVICE_0:-/dev/video0}:${CONTAINER_VIDEO_DEVICE_0:-/dev/video0}"
+      - "${VIDEO_DEVICE_1:-/dev/video1}:${CONTAINER_VIDEO_DEVICE_1:-/dev/video1}"

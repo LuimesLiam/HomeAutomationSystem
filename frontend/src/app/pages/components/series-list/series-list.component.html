@@ -1,0 +1,51 @@
+<div class="series-container">
+  <ng-container *ngFor="let genre of shows | keyvalue; trackBy: trackByGenre">
+    <section class="genre-row" *ngIf="hasContent(genre)">
+      <div class="genre-header">
+        <h2 class="genre-title">{{ genre.key }}</h2>
+        <button 
+          class="view-all-btn" 
+          *ngIf="!loadedGenres.has(genre.key)" 
+          (click)="onLoadGenre(genre.key)">
+          View All
+        </button>
+      </div>
+      
+      <div class="scroll-container">
+        <div class="series-grid">
+          <article 
+            class="series-card" 
+            *ngFor="let series of genre.value; trackBy: trackBySeries"
+            (click)="onSeriesClick(series)"
+            (keydown.enter)="onSeriesClick(series)"
+            tabindex="0"
+            role="button"
+            [attr.aria-label]="'View ' + series.title">
+            <div class="poster-wrapper">
+              <div *ngIf="isSeriesWatched(series)" class="watched-badge" title="Watched">✓</div>
+              <img 
+                [src]="series.thumbnail || placeholderImage" 
+                [alt]="series.title"
+                class="series-poster"
+                [class.watched-poster]="isSeriesWatched(series)"
+                loading="lazy"
+                (error)="onImageError($event)" />
+              <div class="card-overlay">
+                <span class="play-icon">▶</span>
+              </div>
+            </div>
+            <div class="series-info">
+              <h3 class="series-title" [title]="series.title">{{ series.title }}</h3>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+  
+  <!-- Empty state -->
+  <div class="empty-state" *ngIf="(shows | keyvalue).length === 0">
+    <div class="empty-icon">📺</div>
+    <p class="empty-text">No TV shows available</p>
+  </div>
+</div>

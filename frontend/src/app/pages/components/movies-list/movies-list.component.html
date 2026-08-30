@@ -1,0 +1,113 @@
+<div class="movies-list">
+  <div *ngFor="let genre of movies | keyvalue" class="genre-row">
+    <div class="genre-row__header">
+      <h3 class="genre-row__title">{{ genre.key }}</h3>
+      <button 
+        class="genre-row__view-all"
+        (click)="openGenreOverlay(genre.key)">
+        View All →
+      </button>
+    </div>
+    <div class="scroll-container">
+      <div 
+        class="media-card movie-card" 
+        *ngFor="let movie of genre.value; trackBy: trackByMovieId" 
+        (click)="onPlay(movie)"
+        [class.watched]="movie.watched"
+        [attr.aria-label]="'Play ' + movie.title">
+        <div *ngIf="movie.watched" class="watched-badge" title="Watched">
+          ✓
+        </div>
+        <img 
+          [src]="movie.thumbnail || movie.thumbnailUrl || 'assets/placeholder-movie.jpg'" 
+          [alt]="movie.title"
+          class="media-card__image"
+          loading="lazy"
+          (error)="onImageError($event)">
+        <div class="media-card__overlay">
+          <h4 class="media-card__title">{{ movie.title }}</h4>
+          <p class="media-card__subtitle" *ngIf="movie.year">{{ movie.year }}</p>
+        </div>
+        <div class="movie-card__play-button">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div *ngIf="(movies | keyvalue).length === 0" class="movies-list__empty">
+    <p>No movies found. Click "Sync Movies" to scan your media library.</p>
+  </div>
+</div>
+
+<div *ngIf="showGenreOverlay" class="genre-overlay" (click)="closeGenreOverlay()">
+  <div class="genre-overlay__card" (click)="$event.stopPropagation()">
+    <div class="genre-overlay__header">
+      <h3 class="genre-overlay__title">{{ overlayGenre }}</h3>
+      <button class="genre-overlay__close" (click)="closeGenreOverlay()" aria-label="Close">×</button>
+    </div>
+    <div class="genre-overlay__body">
+      <div class="genre-overlay__toolbar">
+        <input
+          type="text"
+          class="genre-overlay__search"
+          [value]="overlaySearch"
+          (input)="updateOverlaySearch($any($event.target).value)"
+          placeholder="Search title or year">
+        <div class="genre-overlay__pager">
+          <span>Items per page:</span>
+          <select
+            class="genre-overlay__page-size"
+            [value]="overlayPageSize"
+            (change)="setOverlayPageSize($any($event.target).value)">
+            <option *ngFor="let size of overlayPageSizeOptions" [value]="size">{{ size }}</option>
+          </select>
+        </div>
+      </div>
+      <div *ngIf="overlayLoading" class="genre-overlay__loading">Loading...</div>
+      <table *ngIf="!overlayLoading" class="genre-overlay__table">
+        <thead>
+          <tr>
+            <th>Poster</th>
+            <th>Title</th>
+            <th>Year</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let movie of overlayMovies; trackBy: trackByMovieId"
+            class="genre-overlay__row"
+            (click)="playFromOverlay(movie)">
+            <td>
+              <img
+                [src]="movie.thumbnail || movie.thumbnailUrl || 'assets/placeholder-movie.jpg'"
+                [alt]="movie.title"
+                class="genre-overlay__poster"
+                loading="lazy"
+                (error)="onImageError($event)">
+            </td>
+            <td>{{ movie.title }}</td>
+            <td>{{ movie.year || '—' }}</td>
+          </tr>
+          <tr *ngIf="overlayMovies.length === 0">
+            <td colspan="3" class="genre-overlay__empty">No movies found for this genre.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div *ngIf="!overlayLoading" class="genre-overlay__pagination">
+        <div class="genre-overlay__page-info">
+          Page {{ overlayPageIndex + 1 }} of {{ overlayTotalPages }}
+          <span *ngIf="overlayTotalCount">({{ overlayTotalCount }} items)</span>
+        </div>
+        <div class="genre-overlay__page-controls">
+          <button (click)="setOverlayPageIndex(0)" [disabled]="overlayPageIndex === 0">First</button>
+          <button (click)="setOverlayPageIndex(overlayPageIndex - 1)" [disabled]="overlayPageIndex === 0">Prev</button>
+          <button (click)="setOverlayPageIndex(overlayPageIndex + 1)" [disabled]="overlayPageIndex + 1 >= overlayTotalPages">Next</button>
+          <button (click)="setOverlayPageIndex(overlayTotalPages - 1)" [disabled]="overlayPageIndex + 1 >= overlayTotalPages">Last</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

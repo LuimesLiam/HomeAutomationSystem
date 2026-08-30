@@ -1,0 +1,86 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/dotnet-postgres
+{
+    "name": "C# (.NET) and PostgreSQL",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "app",
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"features": {
+		"ghcr.io/devcontainers/features/dotnet:2": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "lts"
+		},
+		"ghcr.io/devcontainers-extra/features/angular-cli:2": {},
+		"ghcr.io/devcontainers/features/python:1": {
+            "version": "3.12"
+        }
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				// Add your VS Code extensions here, e.g.:
+				"ms-dotnettools.csharp",
+				"ms-python.python",
+				"esbenp.prettier-vscode",
+				"ms-dotnettools.csdevkit",
+				"angular.ng-template",
+				"ms-dotnettools.csharp",
+				"ms-dotnettools.vscodeintellicode-csharp",
+				"ms-dotnettools.csdevkit",
+				"ms-dotnettools.csharp",
+				"ms-dotnettools.vscodeintellicode-csharp",
+				"ms-ossdata.vscode-postgresql",
+				"ms-ossdata.vscode-pgsql",
+				"openai.chatgpt"
+			],
+			"settings": {
+				"pgsql.connections": [
+					{
+						"host": "postgres",
+						"port": 5432,
+						"user": "postgres",
+						"password": "postgres",
+						"database": "postgres",
+						"displayName": "HomeApp PostgreSQL",
+						"ssl": {
+							"enabled": false
+						}
+					}
+				]
+			}
+		}
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [5000, 5001, 5432],
+	// "portsAttributes": {
+	//		"5001": {
+	//			"protocol": "https"
+	//		}
+	// }
+
+    // Use 'postCreateCommand' to run commands after the container is created.
+    "postCreateCommand": "pip install -r backend/PythonServices/requirements.txt && pip install opencv-python --break-system-packages && cd frontend && npm ci && bash set-dotnet-secrets.sh",
+
+  "forwardPorts": [
+    7096, // Endpoint (GraphQL) HTTPS
+    8000, // Code Runner HTTP
+    8001, // Code Agent HTTP
+    45600, // FDI Host HTTPS
+    45601, // Angular Frontend HTTPS
+    7104, // FDI Persona HTTPS,
+	5432,
+	5000,
+    "pgadmin:15433", // PgAdmin Container HTTP
+    "grafana:3000", // Grafana UI
+    "prometheus:9090", // Prometheus UI
+    "loki:3100", // Loki API
+  ],
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	//"remoteUser": "root"
+}

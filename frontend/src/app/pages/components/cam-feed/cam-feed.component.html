@@ -1,0 +1,69 @@
+<section class="camera-dashboard">
+  <header class="dashboard-header">
+    <div>
+      <h1 class="dashboard-title">Camera Dashboard</h1>
+      <p class="dashboard-subtitle">Monitor and control feeds from one place. Ready for multi-camera expansion.</p>
+    </div>
+    <div class="master-controls">
+      <button class="master-btn" (click)="enableAllFeeds()" [disabled]="isAnyCameraBusy()">
+        Turn All On
+      </button>
+      <button class="master-btn master-btn--secondary" (click)="disableAllFeeds()" [disabled]="isAnyCameraBusy()">
+        Turn All Off
+      </button>
+    </div>
+  </header>
+
+  <div class="status-strip">
+    <span class="status-pill status-pill--live">{{ getActiveCameraCount() }} Live</span>
+    <span class="status-pill" [class.status-pill--offline]="!hasEnabledFeed()">
+      {{ hasEnabledFeed() ? 'At Least One Feed Active' : 'All Feeds Offline' }}
+    </span>
+  </div>
+
+  <div class="camera-grid">
+    <article class="camera-card" *ngFor="let camera of cameras()">
+      <div class="camera-card__header">
+        <div class="camera-card__title-wrap">
+          <h2 class="camera-card__title">{{ camera.title }}</h2>
+          <p class="camera-card__location">{{ camera.location }}</p>
+        </div>
+        <span class="camera-state" [class.camera-state--off]="!camera.enabled">
+          {{ camera.enabled ? 'Live' : 'Off' }}
+        </span>
+      </div>
+
+      <div
+        class="camera-frame"
+        [class.camera-frame--fullscreen]="isFullscreen() && fullscreenCameraId() === camera.id"
+        [attr.data-camera-id]="camera.id"
+      >
+        <img
+          *ngIf="camera.enabled && getStreamUrl(camera) as streamUrl; else feedOff"
+          class="camera-frame__image"
+          [src]="streamUrl"
+          [alt]="camera.title + ' live stream'"
+        />
+        <ng-template #feedOff>
+          <div class="camera-frame__offline">
+            <i class="pi pi-video camera-frame__offline-icon" aria-hidden="true"></i>
+            <p>Feed is currently off</p>
+          </div>
+        </ng-template>
+      </div>
+
+      <div class="camera-card__actions">
+        <button class="camera-action camera-action--primary" (click)="toggleCamera(camera.id)" [disabled]="camera.loading">
+          {{ camera.enabled ? 'Turn Off Feed' : 'Turn On Feed' }}
+        </button>
+        <button
+          class="camera-action camera-action--secondary"
+          (click)="toggleFullScreen($event)"
+          [disabled]="!camera.enabled"
+        >
+          {{ isFullscreen() && fullscreenCameraId() === camera.id ? 'Exit Full Screen' : 'Full Screen' }}
+        </button>
+      </div>
+    </article>
+  </div>
+</section>
