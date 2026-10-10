@@ -1,8 +1,8 @@
 <div class="expenses-page">
   <div class="expenses-hero">
     <div>
-      <h1 class="page-title">Expenses</h1>
-      <p class="page-subtitle">Capture receipts, add manual entries, review spend quickly, and choose which AI model classifies incoming expenses.</p>
+      <h1 class="page-title">Receipts & finances</h1>
+      <p class="page-subtitle">Turn receipt photos into organized expenses. Scan, review, and keep track of your spending.</p>
     </div>
 
     <div class="hero-actions">
@@ -20,14 +20,14 @@
       type="button"
       [class.tab-button-active]="isActiveSection('capture')"
       (click)="setActiveSection('capture')">
-      Capture Expense
+      Add receipt
     </button>
     <button
       class="tab-button"
       type="button"
       [class.tab-button-active]="isActiveSection('history')"
       (click)="setActiveSection('history')">
-      History & Totals
+      Expenses
     </button>
     <button
       class="tab-button"
@@ -55,25 +55,77 @@
   <div class="expenses-stack">
     <section class="expense-panel intake-panel" *ngIf="isActiveSection('capture')">
       <div class="panel-heading">
-        <h2>Capture Or Enter</h2>
-        <p>Use the camera on your phone, upload a receipt, or enter the expense manually when there is no receipt.</p>
+        <span class="capture-eyebrow">YOUR RECEIPT IN THREE SIMPLE STEPS</span>
+        <h2>Less typing. Every receipt accounted for.</h2>
+        <p>Photograph a receipt or choose an image. We’ll read the details for you to check before saving.</p>
       </div>
 
-      <div class="capture-hero-card">
-        <div class="capture-copy">
-          <span class="capture-eyebrow">Phone Friendly Capture</span>
-          <h3>Snap first, review second</h3>
-          <p>The camera chooser is front and center so this feels quick on a phone. You can still add manual totals and corrections below before saving.</p>
+      <div class="receipt-steps" aria-label="Receipt progress" *ngIf="captureMode() === 'receipt'">
+        <span [class.current]="!selectedFileName() && !receiptReview()"><b>1</b> Add receipt</span>
+        <span [class.current]="selectedFileName() && !receiptReview()"><b>2</b> Read details</span>
+        <span [class.current]="receiptReview()"><b>3</b> Review & save</span>
+      </div>
+      <div class="capture-mode-switch" aria-label="Entry type">
+        <button type="button" [attr.aria-pressed]="captureMode() === 'receipt'" [disabled]="captureBusy()" (click)="setCaptureMode('receipt')">Scan a receipt</button>
+        <button type="button" [attr.aria-pressed]="captureMode() === 'manual'" [disabled]="captureBusy()" (click)="setCaptureMode('manual')">Enter manually</button>
+      </div>
+
+      <div class="receipt-capture-area" *ngIf="captureMode() === 'receipt'" [class.dragging]="draggingReceipt()"
+        (dragover)="$event.preventDefault(); draggingReceipt.set(true)" (dragleave)="draggingReceipt.set(false)" (drop)="onReceiptDrop($event)">
+        <div class="receipt-upload-content">
+          <span class="receipt-icon pi pi-camera" aria-hidden="true"></span>
+          <h3>{{ selectedFileName() ? 'Your receipt is ready' : 'Start with a receipt photo' }}</h3>
+          <p>Keep the whole receipt in frame, with clear text and good lighting.</p>
+          <div class="receipt-capture-buttons">
+            <input #cameraInput class="visually-hidden" type="file" accept="image/*" capture="environment" [disabled]="captureBusy()" (change)="onFileSelected($event)" />
+            <input #uploadInput class="visually-hidden" type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif" [disabled]="captureBusy()" (change)="onFileSelected($event)" />
+            <button class="action-button" type="button" [disabled]="captureBusy()" (click)="cameraInput.click()"><i class="pi pi-camera" aria-hidden="true"></i> Take photo</button>
+            <button class="secondary-button" type="button" [disabled]="captureBusy()" (click)="uploadInput.click()"><i class="pi pi-upload" aria-hidden="true"></i> Upload receipt</button>
+          </div>
+          <small>Or drop a photo here · JPG, PNG, WebP, HEIC · Up to 18 MB</small>
         </div>
-
-        <label class="upload-dropzone">
-          <input type="file" accept="image/*" capture="environment" (change)="onFileSelected($event)" />
-          <span class="upload-title">Take or upload receipt</span>
-          <span class="upload-subtitle">Opens the rear camera on mobile when available</span>
-          <span class="upload-file" *ngIf="selectedFileName()">{{ selectedFileName() }}</span>
-        </label>
+        <div class="receipt-image-card" *ngIf="receiptPreviewUrl()">
+          <img [src]="receiptPreviewUrl()" alt="Selected receipt to review" (error)="$any($event.target).hidden = true" />
+          <span>{{ selectedFileName() }}</span>
+          <button class="ghost-button" type="button" (click)="clearReceipt()" [disabled]="captureBusy()">Remove receipt</button>
+        </div>
       </div>
+      <div class="request-feedback" role="status" aria-live="polite" *ngIf="captureFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
+        <i *ngIf="feedback.tone === 'pending'" class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+        <span>{{ feedback.message }}</span>
+      </div>
+      <div class="receipt-retry" *ngIf="captureMode() === 'receipt' && selectedFileName() && !receiptReview() && !captureBusy()">
+        <button class="secondary-button" type="button" (click)="autofillFromReceipt()">Try reading receipt again</button>
+      </div>
+      <details class="receipt-text-entry" *ngIf="captureMode() === 'receipt' && !receiptReview()">
+        <summary>Have receipt text instead?</summary>
+        <label class="field-block"><span>Paste receipt text</span><textarea rows="4" [disabled]="captureBusy()" [ngModel]="expenseForm().receiptText" (ngModelChange)="updateForm('receiptText', $event)"></textarea></label>
+        <button class="secondary-button" type="button" (click)="autofillFromReceipt()" [disabled]="captureBusy() || !expenseForm().receiptText.trim()">Read receipt text</button>
+      </details>
 
+      <div class="receipt-review-form" *ngIf="captureMode() === 'manual' || receiptReview()">
+        <div class="panel-heading"><h3>{{ captureMode() === 'manual' ? 'Enter an expense' : 'Check your receipt details' }}</h3><p>Check the merchant, date, category and total. You can correct any field.</p></div>
+        <fieldset [disabled]="captureBusy()">
+<div class="form-grid two-column"><label class="field-block"><span>Merchant</span><input type="text"  [ngModel]="expenseForm().merchantName" (ngModelChange)="updateForm('merchantName', $event)" /></label><label class="field-block"><span>Date</span><input type="date"  [ngModel]="expenseForm().expenseDate" (ngModelChange)="updateForm('expenseDate', $event)" /></label></div><div class="form-grid three-column"><label class="field-block"><span>Total</span><input type="number" min="0.01" step="0.01" inputmode="decimal" [ngModel]="expenseForm().totalAmount" (ngModelChange)="updateForm('totalAmount', $event)" /></label><label class="field-block"><span>Currency</span><input type="text" maxlength="3" [ngModel]="expenseForm().currencyCode" (ngModelChange)="updateForm('currencyCode', ($event || '').toUpperCase())" /></label>
+<label class="field-block"><span>Category</span><select [ngModel]="expenseForm().expenseGroupId ?? ''" (ngModelChange)="updateForm('expenseGroupId', $event ? +$event : null)"><option value="">{{ captureMode() === 'manual' ? 'Choose a category' : 'Unclassified' }}</option><option *ngFor="let group of expenseGroups()" [value]="group.id">{{ group.name }}</option></select></label></div>
+<details class="receipt-text-entry"><summary>Tax, tip & more details</summary><div class="form-grid three-column"><label class="field-block"><span>Subtotal</span><input type="number" min="0" step="0.01" inputmode="decimal" [ngModel]="expenseForm().subtotalAmount" (ngModelChange)="updateForm('subtotalAmount', $event)" /></label><label class="field-block"><span>Tax</span><input type="number" min="0" step="0.01" inputmode="decimal" [ngModel]="expenseForm().taxAmount" (ngModelChange)="updateForm('taxAmount', $event)" /></label><label class="field-block"><span>Tip</span><input type="number" min="0" step="0.01" inputmode="decimal" [ngModel]="expenseForm().tipAmount" (ngModelChange)="updateForm('tipAmount', $event)" /></label></div><div class="form-grid two-column"><label class="field-block"><span>Location</span><input type="text"  [ngModel]="expenseForm().location" (ngModelChange)="updateForm('location', $event)" /></label><label class="field-block"><span>Payment method</span><input type="text"  [ngModel]="expenseForm().paymentMethod" (ngModelChange)="updateForm('paymentMethod', $event)" /></label></div><label class="field-block"><span>Description</span><input type="text"  [ngModel]="expenseForm().description" (ngModelChange)="updateForm('description', $event)" /></label><label class="field-block"><span>Notes</span><textarea rows="3" [ngModel]="expenseForm().notes" (ngModelChange)="updateForm('notes', $event)"></textarea></label><label class="field-block"><span>Receipt text</span><textarea rows="4" [ngModel]="expenseForm().receiptText" (ngModelChange)="updateForm('receiptText', $event)"></textarea></label></details>
+        </fieldset>
+        <div class="receipt-items" *ngIf="receiptReview() as review">
+          <h3>Purchased items <span class="table-secondary">({{ review.extraction.items.length }})</span></h3>
+          <div class="receipt-item-row" *ngFor="let item of review.extraction.items">
+            <span><strong>{{ item.name }}</strong><small *ngIf="item.quantity">{{ item.quantity }} {{ item.unit || '' }}</small></span>
+            <strong>{{ formatMoney(item.totalPrice, expenseForm().currencyCode) }}</strong>
+          </div>
+          <p class="table-secondary" *ngIf="!review.extraction.items.length">No individual items were found. Check the total before saving.</p>
+        </div>
+        <div class="receipt-save-bar">
+          <span>{{ captureMode() === 'receipt' ? 'Your receipt photo and items will be kept with this expense.' : 'Save this entry to your expenses.' }}</span>
+          <button class="action-button" type="button" (click)="captureMode() === 'receipt' ? saveReviewedReceipt() : saveManualExpense()" [disabled]="captureBusy()">
+            {{ captureBusy() ? 'Saving…' : captureMode() === 'receipt' ? 'Save receipt' : 'Save expense' }}
+          </button>
+        </div>
+      </div>
+      <details class="statement-import-disclosure"><summary>Import a bank or card statement</summary>
       <div class="capture-hero-card csv-import-card">
         <div class="capture-copy">
           <span class="capture-eyebrow">Statement Import</span>
@@ -84,7 +136,7 @@
         <label class="upload-dropzone csv-dropzone">
           <input type="file" accept=".csv,text/csv" (change)="onCsvFileSelected($event)" />
           <span class="upload-title">Choose statement CSV</span>
-          <span class="upload-subtitle">Schema detection is built in so we can add more bank export formats without changing the import flow.</span>
+          <span class="upload-subtitle">Choose a CSV export from your bank or card provider.</span>
           <span class="upload-file" *ngIf="selectedCsvFileName()">{{ selectedCsvFileName() }}</span>
         </label>
 
@@ -105,128 +157,7 @@
         </div>
       </div>
 
-      <div class="form-grid two-column">
-        <label class="field-block">
-          <span>Classification group</span>
-          <select [ngModel]="expenseForm().expenseGroupId ?? ''" (ngModelChange)="updateForm('expenseGroupId', $event ? +$event : null)">
-            <option value="">Select a group</option>
-            <option *ngFor="let group of expenseGroups(); trackBy: trackByGroupId" [value]="group.id">
-              {{ group.name }}
-            </option>
-          </select>
-        </label>
-
-        <label class="field-block">
-          <span>Date</span>
-          <p-datepicker
-            inputId="manualExpenseDate"
-            styleClass="expense-date-picker"
-            inputStyleClass="expense-date-picker-input"
-            [ngModel]="expenseForm().expenseDate"
-            (ngModelChange)="setManualExpenseDate($event)"
-            dateFormat="yy-mm-dd"
-            dataType="string"
-            [showIcon]="true"
-            iconDisplay="input"
-            [showButtonBar]="true"
-            [readonlyInput]="true">
-          </p-datepicker>
-        </label>
-      </div>
-
-      <div class="form-grid four-column">
-        <label class="field-block">
-          <span>Total</span>
-          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().totalAmount" (ngModelChange)="updateForm('totalAmount', $event)" placeholder="0.00" />
-        </label>
-
-        <label class="field-block">
-          <span>Subtotal</span>
-          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().subtotalAmount" (ngModelChange)="updateForm('subtotalAmount', $event)" placeholder="0.00" />
-        </label>
-
-        <label class="field-block">
-          <span>Tax</span>
-          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().taxAmount" (ngModelChange)="updateForm('taxAmount', $event)" placeholder="0.00" />
-        </label>
-
-        <label class="field-block">
-          <span>Tip</span>
-          <input type="number" min="0" step="0.01" [ngModel]="expenseForm().tipAmount" (ngModelChange)="updateForm('tipAmount', $event)" placeholder="0.00" />
-        </label>
-      </div>
-
-      <div class="form-grid two-column">
-        <label class="field-block">
-          <span>Merchant</span>
-          <input type="text" [ngModel]="expenseForm().merchantName" (ngModelChange)="updateForm('merchantName', $event)" placeholder="Store or vendor" />
-        </label>
-
-        <label class="field-block">
-          <span>Location</span>
-          <input type="text" [ngModel]="expenseForm().location" (ngModelChange)="updateForm('location', $event)" placeholder="City or branch" />
-        </label>
-      </div>
-
-      <div class="form-grid three-column">
-        <label class="field-block">
-          <span>Currency</span>
-          <input type="text" maxlength="3" [ngModel]="expenseForm().currencyCode" (ngModelChange)="updateForm('currencyCode', ($event || '').toUpperCase())" placeholder="USD" />
-        </label>
-
-        <label class="field-block">
-          <span>Payment method</span>
-          <input type="text" [ngModel]="expenseForm().paymentMethod" (ngModelChange)="updateForm('paymentMethod', $event)" placeholder="Card, cash, Apple Pay" />
-        </label>
-
-        <label class="field-block">
-          <span>Short description</span>
-          <input type="text" [ngModel]="expenseForm().description" (ngModelChange)="updateForm('description', $event)" placeholder="Weekly grocery run" />
-        </label>
-      </div>
-
-      <label class="field-block">
-        <span>Receipt text</span>
-        <textarea rows="4" [ngModel]="expenseForm().receiptText" (ngModelChange)="updateForm('receiptText', $event)" placeholder="Optional OCR or copied receipt text if you don’t have an image"></textarea>
-      </label>
-
-      <label class="field-block">
-        <span>Notes</span>
-        <textarea rows="3" [ngModel]="expenseForm().notes" (ngModelChange)="updateForm('notes', $event)" placeholder="Anything else worth keeping with the expense"></textarea>
-      </label>
-
-      <div class="capture-form-footer">
-        <div class="request-feedback" *ngIf="captureFeedback() as feedback" [class.request-feedback-pending]="feedback.tone === 'pending'" [class.request-feedback-success]="feedback.tone === 'success'" [class.request-feedback-error]="feedback.tone === 'error'">
-          <strong>
-            {{ feedback.tone === 'pending' ? 'Working...' : feedback.tone === 'success' ? 'Completed' : 'Action failed' }}
-          </strong>
-          <span>{{ feedback.message }}</span>
-        </div>
-
-        <div class="capture-form-footer-header">
-          <div class="capture-actions-copy">
-            <strong>Save expense</strong>
-            <span>Manual save is for typed entries. AI save is for receipt photos or pasted receipt text.</span>
-          </div>
-
-          <div class="capture-mode-chip-row">
-            <span class="capture-mode-chip">Manual</span>
-            <span class="capture-mode-chip capture-mode-chip-accent">Receipt + AI</span>
-          </div>
-        </div>
-
-        <div class="capture-form-footer-actions">
-          <button class="ghost-button" type="button" (click)="autofillFromReceipt()" [disabled]="autofillingExpense() || savingManual() || analyzingReceipt()">
-            {{ autofillingExpense() ? 'Auto Filling...' : 'Auto Fill With AI' }}
-          </button>
-          <button class="secondary-button" type="button" (click)="saveManualExpense()" [disabled]="savingManual() || analyzingReceipt() || autofillingExpense()">
-            {{ savingManual() ? 'Saving...' : 'Save Manual Entry' }}
-          </button>
-          <button class="action-button" type="button" (click)="analyzeReceipt()" [disabled]="analyzingReceipt() || savingManual() || autofillingExpense()">
-            {{ analyzingReceipt() ? 'Analyzing And Saving...' : 'Analyze Receipt And Save' }}
-          </button>
-        </div>
-      </div>
+      </details>
     </section>
 
     <section class="expense-panel table-panel" *ngIf="isActiveSection('history')">
@@ -755,15 +686,15 @@
 
     <section class="expense-panel settings-panel" *ngIf="isActiveSection('settings')">
       <div class="panel-heading">
-        <h2>Agent Settings</h2>
-        <p>Select the model used for receipt extraction and manage classification groups.</p>
+        <h2>Receipt settings</h2>
+        <p>Receipts use the model marked Default in AI settings unless you choose an override. Set your default currency and expense categories here.</p>
       </div>
 
       <div class="form-grid two-column">
         <label class="field-block">
           <span>Receipt model</span>
           <select [ngModel]="settings().modelKey ?? ''" (ngModelChange)="updateSettingsField('modelKey', $event || null)">
-            <option value="">Use default model</option>
+            <option value="">Use default from AI settings</option>
             <option *ngFor="let model of availableModels()" [value]="model.key">
               {{ model.name }} · {{ model.providerName }}
             </option>

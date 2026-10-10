@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       POSTGRES_CONNECTION: "Host=postgres;Port=5432;Database=postgres;Username=postgres;Password=${POSTGRES_PASSWORD:?Run initialize-env.sh first}"
     # devices:
     #   - /dev/video0:/dev/video0
@@ -76,6 +78,8 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+      - "--enable-feature=exemplar-storage"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -113,9 +117,39 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
     networks:
       - backend
+
+  tempo:
+    image: "grafana/tempo:${TEMPO_IMAGE_TAG:-2.10.3}"
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ../monitoring/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "127.0.0.1:3201:3200"
+    networks:
+      - backend
+
+  otel-collector:
+    image: "otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.147.0}"
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yml"]
+    volumes:
+      - ../monitoring/otel-collector/config.yml:/etc/otelcol-contrib/config.yml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      - tempo
+      - loki
+    networks:
+      - backend
+
 volumes:
+  tempo-data:
   postgres-data:
   recorded_videos:
   prometheus-data:

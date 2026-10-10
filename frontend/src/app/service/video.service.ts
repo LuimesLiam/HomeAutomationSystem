@@ -279,6 +279,7 @@ export interface ApproveExpenseImportRowsRequest {
 }
 
 export interface ExpensePreviewResponse {
+  reviewToken: string;
   expenseGroupId?: number | null;
   expenseDate: string;
   totalAmount?: number | null;
@@ -576,6 +577,13 @@ export class VideoService {
     }
 
     return this.http.post<AnalyzeExpenseResponse>(`${this.expensesUrl}/analyze`, formData);
+  }
+
+  saveReviewedExpense(payload: Record<string, string>, file?: File | null): Observable<ExpenseEntry> {
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
+    if (file) formData.append('file', file, file.name);
+    return this.http.post<ExpenseEntry>(`${this.expensesUrl}/save-reviewed`, formData);
   }
 
   importExpenseCsv(modelKey: string | null | undefined, file: File): Observable<ExpenseCsvImportResponse> {

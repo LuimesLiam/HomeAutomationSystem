@@ -1,4 +1,7 @@
 using HomeApp.Library.Imaging;
+using Microsoft.AspNetCore.DataProtection;
+using System.Security.Cryptography;
+using System.Text.Json;
 using ImageMagick;
 using HomeApp.Expenses.Data;
 using HomeApp.Expenses.Services;
@@ -13,9 +16,12 @@ public sealed class ExpensesController : ControllerBase
 {
     private readonly ExpenseService _expenseService;
 
-    public ExpensesController(ExpenseService expenseService)
+    private readonly IDataProtector _receiptProtector;
+
+    public ExpensesController(ExpenseService expenseService, IDataProtectionProvider protectionProvider)
     {
         _expenseService = expenseService;
+        _receiptProtector = protectionProvider.CreateProtector("HomeApp.Receipts.Review.v1");
     }
 
     [HttpGet]
@@ -212,6 +218,9 @@ public sealed class ExpensesController : ControllerBase
             Notes = preview.Notes,
             ReceiptText = preview.ReceiptText,
             ModelKeyUsed = preview.ModelKeyUsed,
+            ReviewToken = _receiptProtector.Protect(JsonSerializer.Serialize(new ReceiptReviewTicket(
+                preview.Extraction, preview.ModelKeyUsed, Convert.ToHexString(SHA256.HashData(processedImage.Bytes.Span)),
+                DateTimeOffset.UtcNow))),
             Extraction = new ReceiptExtractionDto
             {
                 ClassificationGroupKey = preview.Extraction.ClassificationGroupKey,
@@ -231,6 +240,37 @@ public sealed class ExpensesController : ControllerBase
                 Items = preview.Extraction.Items.Select(MapExtractionItem).ToList()
             }
         });
+    }
+
+    [HttpPost("save-reviewed")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ExpenseDto>> SaveReviewed([FromForm] AnalyzeExpenseFormDto request, CancellationToken ct)
+    {
+        ReceiptReviewTicket? ticket;
+        try
+        {
+            ticket = JsonSerializer.Deserialize<ReceiptReviewTicket>(_receiptProtector.Unprotect(request.ReviewToken ?? ""));
+        }
+        catch (Exception exception) when (exception is CryptographicException or JsonException)
+        {
+            return BadRequest("This receipt review is invalid. Scan the receipt again.");
+        }
+        if (ticket == null || DateTimeOffset.UtcNow - ticket.CreatedAtUtc > TimeSpan.FromHours(24))
+            return BadRequest("This receipt review has expired. Scan the receipt again.");
+
+        var image = await ProcessReceiptImageAsync(request.File, ct);
+        if (ticket.ImageHash != Convert.ToHexString(SHA256.HashData(image.Bytes.Span)))
+            return BadRequest("The receipt image changed. Scan the new receipt before saving.");
+        if (request.TotalAmount is not > 0)
+            return BadRequest("Enter a receipt total greater than zero before saving.");
+
+        var result = await _expenseService.SaveReviewedExpenseAsync(new AnalyzeExpenseRequest(
+            ticket.ModelKey, request.ExpenseGroupId, request.ExpenseDate, request.TotalAmount,
+            request.SubtotalAmount, request.TaxAmount, request.TipAmount, request.CurrencyCode,
+            request.MerchantName, request.Location, request.PaymentMethod, request.Description,
+            request.Notes, request.ReceiptText, request.File?.FileName, image.ContentType, image.Bytes),
+            ticket.Extraction, ticket.ModelKey, ct);
+        return Ok(MapExpense(result.Expense));
     }
 
     [HttpPost("analyze")]
@@ -800,6 +840,7 @@ public sealed class CreateManualExpenseRequestDto
 
 public sealed class AnalyzeExpenseFormDto
 {
+    public string? ReviewToken { get; set; }
     public string? ModelKey { get; set; }
     public int? ExpenseGroupId { get; set; }
     public DateOnly? ExpenseDate { get; set; }
@@ -825,6 +866,7 @@ public sealed class AnalyzedExpenseResponseDto
 
 public sealed class ExpensePreviewResponseDto
 {
+    public string ReviewToken { get; set; } = string.Empty;
     public int? ExpenseGroupId { get; set; }
     public DateOnly ExpenseDate { get; set; }
     public decimal? TotalAmount { get; set; }
@@ -957,3 +999,5 @@ public sealed class ReceiptLineItemDto
     public decimal? UnitPrice { get; set; }
     public decimal? TotalPrice { get; set; }
 }
+
+internal sealed record ReceiptReviewTicket(ReceiptExpenseExtraction Extraction, string ModelKey, string ImageHash, DateTimeOffset CreatedAtUtc);

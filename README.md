@@ -9,10 +9,12 @@ camera feeds and host-side VLC playback.
 
 - Browse movie and TV libraries and control playback on a connected host.
 - Configure OpenAI-compatible model endpoints and keep chat sessions in PostgreSQL.
-- Capture expenses manually or from receipts, review imports and compare item prices.
+- Scan or upload receipts, review extracted details before saving, track expenses,
+  review statement imports and compare item prices.
 - Save commute corridors and dashboards with traffic cameras, road reports, vessel
   positions and advisory lift-bridge estimates.
-- Inspect metrics and traces with the optional monitoring stack.
+- Inspect MAF/model/request traces in Tempo, correlated metrics in Prometheus,
+  and logs in Loki through the [Grafana monitoring stack](docs/observability.md).
 
 Commute monitoring does not calculate driving time. Bridge estimates are
 heuristics, and provider coverage can be incomplete. The

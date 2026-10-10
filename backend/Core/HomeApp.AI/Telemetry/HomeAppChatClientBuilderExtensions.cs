@@ -16,7 +16,7 @@ public static class HomeAppChatClientBuilderExtensions
         ArgumentNullException.ThrowIfNull(loggerFactory);
 
         return builder
-            .UseOpenTelemetry(loggerFactory, HomeAppTelemetry.ActivitySourceName, _ => { })
+            .UseOpenTelemetry(loggerFactory, HomeAppTelemetry.ActivitySourceName, options => options.EnableSensitiveData = false)
             .UseHomeAppTokenMetrics(model);
     }
 

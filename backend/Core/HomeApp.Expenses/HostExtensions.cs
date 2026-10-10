@@ -20,6 +20,7 @@ public static class HostExtensions
         services.AddControllers()
             .AddApplicationPart(typeof(HostExtensions).Assembly);
         services.AddHttpClient();
+        services.AddDataProtection();
         services.AddScoped<ExpenseService>();
         return services;
     }

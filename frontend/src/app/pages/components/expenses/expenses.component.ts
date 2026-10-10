@@ -1,12 +1,10 @@
-import { DatePickerModule } from 'primeng/datepicker';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import {
   ApproveExpenseImportRowsRequest,
-  AnalyzeExpenseResponse,
   CreateManualExpenseRequest,
   ExpenseCsvImportResponse,
   ExpenseImportApprovalPayload,
@@ -67,9 +65,9 @@ type ReportGroupDrilldown = {
   templateUrl: './expenses.component.html',
   styleUrls: ['./expenses.component.scss'],
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePickerModule]
+  imports: [CommonModule, FormsModule]
 })
-export class ExpensesComponent implements OnInit {
+export class ExpensesComponent implements OnInit, OnDestroy {
   readonly reportMonthOptions = [
     { value: '01', label: 'January' },
     { value: '02', label: 'February' },
@@ -108,6 +106,86 @@ export class ExpensesComponent implements OnInit {
   readonly reclassifyingItem = signal(false);
   readonly itemFeedback = signal<ExpenseRequestFeedback | null>(null);
   readonly selectedFileName = signal('');
+  readonly receiptPreviewUrl = signal('');
+  readonly receiptReview = signal<ExpensePreviewResponse | null>(null);
+  readonly captureMode = signal<'receipt' | 'manual'>('receipt');
+  readonly draggingReceipt = signal(false);
+
+  captureBusy(): boolean {
+    return this.autofillingExpense() || this.analyzingReceipt() || this.savingManual();
+  }
+
+  ngOnDestroy(): void {
+    this.releaseReceiptPreview();
+  }
+
+  private releaseReceiptPreview(): void {
+    if (this.receiptPreviewUrl()) URL.revokeObjectURL(this.receiptPreviewUrl());
+    this.receiptPreviewUrl.set('');
+  }
+
+  setCaptureMode(mode: 'receipt' | 'manual'): void {
+    if (this.captureBusy() || mode === this.captureMode()) return;
+    this.resetExpenseForm();
+    this.captureFeedback.set(null);
+    this.captureMode.set(mode);
+  }
+
+  clearReceipt(): void {
+    if (this.captureBusy()) return;
+    this.resetExpenseForm();
+    this.captureFeedback.set(null);
+  }
+
+  onReceiptDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.draggingReceipt.set(false);
+    const file = event.dataTransfer?.files[0];
+    if (file) this.selectReceipt(file);
+  }
+
+  private selectReceipt(file: File): void {
+    if (this.captureBusy()) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type) &&
+        !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+      this.captureFeedback.set({ tone: 'error', message: 'Choose a JPG, PNG, WebP or HEIC receipt photo.' });
+      return;
+    }
+    if (file.size > 18_000_000) {
+      this.captureFeedback.set({ tone: 'error', message: 'This photo is too large. Choose an image smaller than 18 MB.' });
+      return;
+    }
+    this.resetExpenseForm();
+    this.selectedFile = file;
+    this.selectedFileName.set(file.name);
+    this.receiptPreviewUrl.set(URL.createObjectURL(file));
+    this.autofillFromReceipt();
+  }
+
+  saveReviewedReceipt(): void {
+    const review = this.receiptReview();
+    if (!review || this.captureBusy()) return;
+    if ((this.parseNumber(this.expenseForm().totalAmount) ?? 0) <= 0) {
+      this.captureFeedback.set({ tone: 'error', message: 'Enter a total greater than zero before saving.' });
+      return;
+    }
+    this.analyzingReceipt.set(true);
+    this.captureFeedback.set({ tone: 'pending', message: 'Saving your reviewed receipt…' });
+    this.videoService.saveReviewedExpense({ ...this.buildAnalyzePayload(), reviewToken: review.reviewToken }, this.selectedFile).subscribe({
+      next: (expense) => {
+        this.resetExpenseForm();
+        this.analyzingReceipt.set(false);
+        this.captureFeedback.set({ tone: 'success', message: `Receipt saved${expense.merchantName ? ' for ' + expense.merchantName : ''}. Ready for the next one.` });
+        this.showToast('success', 'Receipt saved', 'Your receipt and purchased items are saved.');
+        this.loadDashboard({ silentSuccess: true });
+      },
+      error: (error) => {
+        this.analyzingReceipt.set(false);
+        this.captureFeedback.set({ tone: 'error', message: this.extractErrorMessage(error, 'Could not save. Your receipt is still here; please try again.') });
+      }
+    });
+  }
+
   readonly selectedCsvFileName = signal('');
   readonly fetchImportDialogOpen = signal(false);
   readonly fetchImportRequestText = signal('');
@@ -413,10 +491,6 @@ export class ExpensesComponent implements OnInit {
     this.reportExcludeReimbursable.set(value);
   }
 
-  setManualExpenseDate(value: string | null | undefined): void {
-    this.updateForm('expenseDate', value || this.today());
-  }
-
   applyReportFilters(): void {
     const month = this.reportMonth() || this.currentMonth();
     const [yearString, monthString] = month.split('-');
@@ -486,8 +560,8 @@ export class ExpensesComponent implements OnInit {
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement | null;
     const file = input?.files?.[0] ?? null;
-    this.selectedFile = file;
-    this.selectedFileName.set(file?.name ?? '');
+    if (file) this.selectReceipt(file);
+    if (input) input.value = '';
   }
 
   onCsvFileSelected(event: Event): void {
@@ -542,58 +616,25 @@ export class ExpensesComponent implements OnInit {
       return;
     }
 
+    if (this.captureBusy()) return;
+    this.receiptReview.set(null);
     this.autofillingExpense.set(true);
     this.pageMessage.set('');
-    this.captureFeedback.set({ tone: 'pending', message: 'Asking the model to auto-fill the expense...' });
+    this.captureFeedback.set({ tone: 'pending', message: 'Reading your receipt… This may take a moment.' });
 
     this.videoService.analyzeExpensePreview(this.buildAnalyzePayload(), this.selectedFile).subscribe({
       next: (preview: ExpensePreviewResponse) => {
         this.applyPreviewToForm(preview);
-        this.pageMessage.set('Fields were auto-filled. Review them before saving.');
+        this.receiptReview.set(preview);
+        this.pageMessage.set('');
         this.autofillingExpense.set(false);
-        this.captureFeedback.set({ tone: 'success', message: 'Auto fill completed. Review the populated fields before saving.' });
-        this.showToast('success', 'Auto fill complete', 'Review the populated fields before saving.');
+        this.captureFeedback.set({ tone: 'success', message: 'Receipt read. Check the details below before saving.' });
       },
       error: (error) => {
         const message = this.extractErrorMessage(error, 'Auto fill failed.');
-        this.pageMessage.set(message);
+        this.pageMessage.set('');
         this.autofillingExpense.set(false);
         this.captureFeedback.set({ tone: 'error', message });
-        this.showToast('error', 'Auto fill failed', message);
-      }
-    });
-  }
-
-  analyzeReceipt(): void {
-    if (!this.selectedFile && !this.expenseForm().receiptText.trim()) {
-      this.pageMessage.set('Choose a receipt image or paste receipt text before analyzing.');
-      this.showToast('warn', 'Receipt needed', 'Add a receipt image or pasted receipt text before analyzing.');
-      return;
-    }
-
-    this.analyzingReceipt.set(true);
-    this.pageMessage.set('');
-    this.captureFeedback.set({ tone: 'pending', message: 'Uploading receipt and saving analyzed expense...' });
-
-    this.videoService.analyzeExpense(this.buildAnalyzePayload(), this.selectedFile).subscribe({
-      next: (response: AnalyzeExpenseResponse) => {
-        this.pageMessage.set(
-          response.expense.merchantName
-            ? `Receipt analyzed and saved for ${response.expense.merchantName}.`
-            : 'Receipt analyzed and saved.'
-        );
-        this.resetExpenseForm();
-        this.captureFeedback.set({ tone: 'success', message: 'Receipt analyzed and saved.' });
-        this.showToast('success', 'Receipt saved', 'The analyzed expense was saved.');
-        this.loadDashboard({ silentSuccess: true });
-        this.analyzingReceipt.set(false);
-      },
-      error: (error) => {
-        const message = this.extractErrorMessage(error, 'Receipt analysis failed.');
-        this.pageMessage.set(message);
-        this.analyzingReceipt.set(false);
-        this.captureFeedback.set({ tone: 'error', message });
-        this.showToast('error', 'Receipt save failed', message);
       }
     });
   }
@@ -1308,7 +1349,7 @@ export class ExpensesComponent implements OnInit {
   saveExpenseDetail(): void {
     const form = this.editingExpenseForm();
     const totalAmount = this.parseNumber(form.totalAmount);
-    if (totalAmount == null) {
+    if (totalAmount == null || totalAmount <= 0) {
       this.pageMessage.set('A total amount is required before saving edits.');
       this.showToast('warn', 'Missing total', 'A total amount is required before saving edits.');
       return;
@@ -1385,12 +1426,13 @@ export class ExpensesComponent implements OnInit {
     const payload: Record<string, string> = {};
     this.appendPayloadValue(payload, 'modelKey', this.settings().modelKey);
     this.appendPayloadValue(payload, 'expenseGroupId', form.expenseGroupId);
-    this.appendPayloadValue(payload, 'expenseDate', form.expenseDate);
+    // Let the receipt determine date and currency until the user reviews it.
+    if (this.receiptReview()) this.appendPayloadValue(payload, 'expenseDate', form.expenseDate);
     this.appendPayloadValue(payload, 'totalAmount', this.parseNumber(form.totalAmount));
     this.appendPayloadValue(payload, 'subtotalAmount', this.parseNumber(form.subtotalAmount));
     this.appendPayloadValue(payload, 'taxAmount', this.parseNumber(form.taxAmount));
     this.appendPayloadValue(payload, 'tipAmount', this.parseNumber(form.tipAmount));
-    this.appendPayloadValue(payload, 'currencyCode', form.currencyCode);
+    if (this.receiptReview()) this.appendPayloadValue(payload, 'currencyCode', form.currencyCode);
     this.appendPayloadValue(payload, 'merchantName', form.merchantName);
     this.appendPayloadValue(payload, 'location', form.location);
     this.appendPayloadValue(payload, 'paymentMethod', form.paymentMethod);
@@ -1453,6 +1495,10 @@ export class ExpensesComponent implements OnInit {
       return error.error;
     }
 
+    if (typeof error?.error?.message === 'string' && error.error.message.trim()) {
+      return error.error.message;
+    }
+
     if (typeof error?.error?.title === 'string' && error.error.title.trim()) {
       return error.error.title;
     }
@@ -1486,6 +1532,8 @@ export class ExpensesComponent implements OnInit {
   private resetExpenseForm(): void {
     this.selectedFile = null;
     this.selectedFileName.set('');
+    this.releaseReceiptPreview();
+    this.receiptReview.set(null);
     this.expenseForm.set({
       expenseGroupId: null,
       expenseDate: this.today(),
@@ -1521,7 +1569,8 @@ export class ExpensesComponent implements OnInit {
   }
 
   private today(): string {
-    return new Date().toISOString().slice(0, 10);
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
   private currentMonth(): string {

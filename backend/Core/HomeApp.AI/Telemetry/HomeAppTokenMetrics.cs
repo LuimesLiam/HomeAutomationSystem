@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using System.Diagnostics;
 using OpenAI.Chat;
 using Prometheus;
 
@@ -66,10 +67,9 @@ internal static class HomeAppTokenMetrics
         ArgumentNullException.ThrowIfNull(configuredModel);
         ArgumentNullException.ThrowIfNull(update);
 
-        if (update.RawRepresentation is not StreamingChatCompletionUpdate rawUpdate || rawUpdate.Usage is null)
-        {
-            return false;
-        }
+        var usage = update.Contents.OfType<UsageContent>().LastOrDefault()?.Details;
+        var rawUsage = (update.RawRepresentation as StreamingChatCompletionUpdate)?.Usage;
+        if (usage is null && rawUsage is null) return false;
 
         var modelId = string.IsNullOrWhiteSpace(update.ModelId)
             ? configuredModel.RemoteModelId
@@ -84,9 +84,9 @@ internal static class HomeAppTokenMetrics
 
         RecordUsage(
             labels,
-            rawUpdate.Usage.InputTokenCount,
-            rawUpdate.Usage.OutputTokenCount,
-            rawUpdate.Usage.TotalTokenCount);
+            usage?.InputTokenCount ?? rawUsage?.InputTokenCount,
+            usage?.OutputTokenCount ?? rawUsage?.OutputTokenCount,
+            usage?.TotalTokenCount ?? rawUsage?.TotalTokenCount);
 
         return true;
     }
@@ -97,6 +97,11 @@ internal static class HomeAppTokenMetrics
         long? outputTokenCount,
         long? totalTokenCount)
     {
+        Activity.Current?.SetTag("homeapp.ai.provider_key", labels[0]);
+        Activity.Current?.SetTag("homeapp.ai.model_key", labels[1]);
+        Activity.Current?.SetTag("gen_ai.response.model", labels[2]);
+        if (inputTokenCount.HasValue) Activity.Current?.SetTag("gen_ai.usage.input_tokens", inputTokenCount.Value);
+        if (outputTokenCount.HasValue) Activity.Current?.SetTag("gen_ai.usage.output_tokens", outputTokenCount.Value);
         Requests.WithLabels(labels).Inc();
 
         if (inputTokenCount is > 0)

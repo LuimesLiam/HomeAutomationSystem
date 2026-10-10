@@ -37,6 +37,31 @@ public sealed class AiSettingsTests
             app.UseEndpoints(endpoints => endpoints.MapControllers());
         })).Start();
 
+    [Fact]
+    public async Task ModelResolutionFollowsDatabaseDefaultChangesAndHonorsOverrides()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        using var server = Server(connection);
+        using var scope = server.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HomeAppAiDbContext>();
+        await db.Database.EnsureCreatedAsync();
+        var first = new LlmConfiguration { Key = "first", Name = "First", ModelName = "first-model", Provider = "Local", IsDefault = true };
+        var second = new LlmConfiguration { Key = "second", Name = "Second", ModelName = "second-model", Provider = "Local" };
+        db.Llms.AddRange(first, second);
+        await db.SaveChangesAsync();
+        var service = scope.ServiceProvider.GetRequiredService<AiSettingsService>();
+        Assert.Equal("first", (await service.GetResolvedModelAsync(null)).ModelKey);
+        first.IsDefault = false;
+        second.IsDefault = true;
+        await db.SaveChangesAsync();
+        Assert.Equal("second", (await service.GetResolvedModelAsync(null)).ModelKey);
+        Assert.Equal("first", (await service.GetResolvedModelAsync("first")).ModelKey);
+        second.IsEnabled = false;
+        await db.SaveChangesAsync();
+        Assert.Equal("first", (await service.GetResolvedModelAsync(null)).ModelKey);
+    }
+
     [Theory]
     [InlineData("{")]
     [InlineData("[]")]

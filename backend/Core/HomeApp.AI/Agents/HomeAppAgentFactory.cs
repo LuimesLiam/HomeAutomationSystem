@@ -46,13 +46,16 @@ public sealed class HomeAppAgentFactory : IHomeAppAgentFactory
                 ChatOptions = chatOptions
             },
             clientFactory: client => new ChatClientBuilder(client)
-                .UseHomeAppTelemetry(model, _loggerFactory)
                 .UseFunctionInvocation()
+                .UseHomeAppTelemetry(model, _loggerFactory)
                 .Build(),
             loggerFactory: _loggerFactory,
             services: _services);
 
-        return new HomeAppAgentBuildResult(agent, model);
+        var instrumentedAgent = agent.AsBuilder()
+            .UseOpenTelemetry(HomeAppTelemetry.AgentSourceName, options => options.EnableSensitiveData = false)
+            .Build();
+        return new HomeAppAgentBuildResult(instrumentedAgent, model);
     }
 
     private static ChatClient CreateChatClient(HomeAppAgentModelConfiguration model)
