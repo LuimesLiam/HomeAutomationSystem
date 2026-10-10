@@ -1,3 +1,4 @@
+using HomeApp.Commute;
 using HomeApp.AI;
 using HomeApp.AI.Configuration;
 using HomeApp.AI.Data;
@@ -34,6 +35,7 @@ builder.Services.AddSingleton(hostOptions);
 builder.Services.AddSingleton<MediaLibrarySettingsStore>();
 
 builder.Services.AddControllers();
+builder.Services.AddHomeAppCommute(builder.Configuration);
 builder.Services.AddHomeAppAi(builder.Configuration, aiOptions);
 builder.Services.AddHomeAppSecuritySystem(builder.Configuration, securityOptions);
 builder.Services.AddHomeAppVideos(builder.Configuration, videoOptions);
@@ -82,8 +84,6 @@ try
     expensesDbContext.Database.Migrate();
     var mediaSourceService = scope.ServiceProvider.GetRequiredService<MediaSourceService>();
     await mediaSourceService.EnsureSeededAsync();
-    var aiSettingsService = scope.ServiceProvider.GetRequiredService<AiSettingsService>();
-    await aiSettingsService.EnsureSeededAsync();
     var expenseService = scope.ServiceProvider.GetRequiredService<ExpenseService>();
     await expenseService.EnsureSeededAsync();
 }

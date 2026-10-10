@@ -1,4 +1,4 @@
-using HomeApp.AI;
+using System.Text.Json;
 using HomeApp.AI.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,354 +6,232 @@ namespace HomeApp.AI.Services;
 
 public sealed class AiSettingsService : IHomeAppAgentModelCatalog
 {
-    public static readonly IReadOnlyList<AiProviderTemplate> ProviderTemplates =
-    [
-        new(
-            AiProviderType.OpenAI,
-            "openai",
-            "OpenAI",
-            "https://api.openai.com/v1/",
-            "OPENAI_API_KEY",
-            "OpenAI-hosted models"),
-        new(
-            AiProviderType.Gemini,
-            "gemini",
-            "Gemini",
-            "https://generativelanguage.googleapis.com/v1beta/openai/",
-            "GEMINI_API_KEY",
-            "Gemini via the OpenAI-compatible API"),
-        new(
-            AiProviderType.Ollama,
-            "ollama",
-            "Ollama",
-            "http://localhost:11434/v1/",
-            string.Empty,
-            "Local Ollama models through the OpenAI-compatible endpoint")
-    ];
-
     private readonly HomeAppAiDbContext _dbContext;
 
-    public AiSettingsService(HomeAppAiDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
-    public async Task EnsureSeededAsync(CancellationToken ct = default)
-    {
-        if (await _dbContext.AiProviders.AnyAsync(ct) || await _dbContext.AiModels.AnyAsync(ct))
-        {
-            return;
-        }
-
-        var providerEntities = ProviderTemplates
-            .Select(template => new AiProviderConfiguration
-            {
-                Key = template.Key,
-                Name = template.Name,
-                ProviderType = template.ProviderType,
-                BaseUrl = template.DefaultBaseUrl,
-                ApiKeyEnvironmentVariableName = template.DefaultApiKeyEnvironmentVariableName,
-                IsEnabled = true
-            })
-            .ToList();
-
-        _dbContext.AiProviders.AddRange(providerEntities);
-        await _dbContext.SaveChangesAsync(ct);
-
-        var providersByKey = providerEntities.ToDictionary(provider => provider.Key, StringComparer.OrdinalIgnoreCase);
-        _dbContext.AiModels.AddRange(
-        [
-            new AiModelConfiguration
-            {
-                ProviderId = providersByKey["openai"].Id,
-                Key = "openai-gpt-4o-mini",
-                Name = "GPT-4o mini",
-                ModelId = "gpt-4o-mini",
-                IsEnabled = true,
-                IsDefault = true,
-                Temperature = 0.2,
-                MaxOutputTokens = 1200
-            },
-            new AiModelConfiguration
-            {
-                ProviderId = providersByKey["gemini"].Id,
-                Key = "gemini-2-5-flash",
-                Name = "Gemini 2.5 Flash",
-                ModelId = "gemini-2.5-flash",
-                IsEnabled = true,
-                Temperature = 0.2,
-                MaxOutputTokens = 1200
-            },
-            new AiModelConfiguration
-            {
-                ProviderId = providersByKey["ollama"].Id,
-                Key = "ollama-llama3-2",
-                Name = "Llama 3.2",
-                ModelId = "llama3.2",
-                IsEnabled = true,
-                Temperature = 0.2,
-                MaxOutputTokens = 1200
-            }
-        ]);
-
-        await _dbContext.SaveChangesAsync(ct);
-    }
+    public AiSettingsService(HomeAppAiDbContext dbContext) => _dbContext = dbContext;
 
     public async Task<AiSettingsSnapshot> GetSnapshotAsync(CancellationToken ct = default)
     {
-        var providers = await _dbContext.AiProviders
-            .AsNoTracking()
-            .OrderBy(provider => provider.Name)
-            .ThenBy(provider => provider.Id)
+        var llms = await _dbContext.Llms.AsNoTracking()
+            .OrderByDescending(llm => llm.IsDefault)
+            .ThenBy(llm => llm.Name)
+            .ThenBy(llm => llm.Id)
             .ToListAsync(ct);
-
-        var models = await _dbContext.AiModels
-            .AsNoTracking()
-            .OrderBy(model => model.Name)
-            .ThenBy(model => model.Id)
-            .ToListAsync(ct);
-
-        return new AiSettingsSnapshot(providers, models);
+        return new AiSettingsSnapshot(llms);
     }
 
     public async Task<AiSettingsSnapshot> SaveAsync(AiSettingsUpdate update, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(update);
-
-        var normalizedProviders = NormalizeProviders(update.Providers).ToList();
-        var normalizedModels = NormalizeModels(update.Models).ToList();
-
-        if (normalizedProviders.Count == 0)
+        var normalizedLlms = NormalizeLlms(update.Llms).ToList();
+        if (normalizedLlms.Count == 0)
         {
-            throw new InvalidOperationException("At least one AI provider configuration is required.");
+            throw new AiSettingsValidationException("At least one LLM configuration is required.");
         }
 
-        var existingProviders = await _dbContext.AiProviders
-            .OrderBy(provider => provider.Id)
-            .ToListAsync(ct);
-        var existingProvidersById = existingProviders.ToDictionary(provider => provider.Id);
-        var retainedProviderIds = new HashSet<int>();
-        var providerIdMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var provider in normalizedProviders)
-        {
-            if (provider.Id > 0 && existingProvidersById.TryGetValue(provider.Id, out var existing))
-            {
-                existing.Key = provider.Key;
-                existing.Name = provider.Name;
-                existing.ProviderType = provider.ProviderType;
-                existing.BaseUrl = provider.BaseUrl;
-                existing.ApiKeyEnvironmentVariableName = provider.ApiKeyEnvironmentVariableName;
-                existing.IsEnabled = provider.IsEnabled;
-                existing.ConfigurationJson = provider.ConfigurationJson;
-                retainedProviderIds.Add(existing.Id);
-                providerIdMap[provider.Key] = existing.Id;
-            }
-            else
-            {
-                var created = new AiProviderConfiguration
-                {
-                    Key = provider.Key,
-                    Name = provider.Name,
-                    ProviderType = provider.ProviderType,
-                    BaseUrl = provider.BaseUrl,
-                    ApiKeyEnvironmentVariableName = provider.ApiKeyEnvironmentVariableName,
-                    IsEnabled = provider.IsEnabled,
-                    ConfigurationJson = provider.ConfigurationJson
-                };
-
-                _dbContext.AiProviders.Add(created);
-                await _dbContext.SaveChangesAsync(ct);
-                retainedProviderIds.Add(created.Id);
-                providerIdMap[provider.Key] = created.Id;
-            }
-        }
-
-        var existingModels = await _dbContext.AiModels
-            .OrderBy(model => model.Id)
-            .ToListAsync(ct);
-        var existingModelsById = existingModels.ToDictionary(model => model.Id);
-        var retainedModelIds = new HashSet<int>();
+        var existingLlms = await _dbContext.Llms.OrderBy(llm => llm.Id).ToListAsync(ct);
+        var existingById = existingLlms.ToDictionary(llm => llm.Id);
+        var retainedIds = new HashSet<int>();
         var defaultAssigned = false;
 
-        foreach (var model in normalizedModels)
+        foreach (var llm in normalizedLlms)
         {
-            if (!providerIdMap.TryGetValue(model.ProviderKey, out var providerId))
-            {
-                throw new InvalidOperationException($"Model '{model.Name}' references unknown provider key '{model.ProviderKey}'.");
-            }
-
-            var isDefault = model.IsDefault && !defaultAssigned;
+            var isDefault = llm.IsDefault && !defaultAssigned;
             defaultAssigned |= isDefault;
 
-            if (model.Id > 0 && existingModelsById.TryGetValue(model.Id, out var existing))
+            if (llm.Id > 0 && existingById.TryGetValue(llm.Id, out var existing))
             {
-                existing.ProviderId = providerId;
-                existing.Key = model.Key;
-                existing.Name = model.Name;
-                existing.ModelId = model.ModelId;
-                existing.IsEnabled = model.IsEnabled;
-                existing.IsDefault = isDefault;
-                existing.Temperature = model.Temperature;
-                existing.MaxOutputTokens = model.MaxOutputTokens;
-                existing.ConfigurationJson = model.ConfigurationJson;
-                retainedModelIds.Add(existing.Id);
+                Copy(llm, existing, isDefault);
+                retainedIds.Add(existing.Id);
+                continue;
             }
-            else
+
+            _dbContext.Llms.Add(new LlmConfiguration
             {
-                _dbContext.AiModels.Add(new AiModelConfiguration
-                {
-                    ProviderId = providerId,
-                    Key = model.Key,
-                    Name = model.Name,
-                    ModelId = model.ModelId,
-                    IsEnabled = model.IsEnabled,
-                    IsDefault = isDefault,
-                    Temperature = model.Temperature,
-                    MaxOutputTokens = model.MaxOutputTokens,
-                    ConfigurationJson = model.ConfigurationJson
-                });
-            }
+                Key = llm.Key,
+                Name = llm.Name,
+                ModelName = llm.ModelName,
+                Provider = llm.Provider,
+                BaseUrl = llm.BaseUrl,
+                ApiKeyName = llm.ApiKeyName,
+                ParamsJson = llm.ParamsJson,
+                IsEnabled = llm.IsEnabled,
+                IsDefault = isDefault
+            });
         }
 
-        foreach (var provider in existingProviders.Where(provider => !retainedProviderIds.Contains(provider.Id)))
+        foreach (var llm in existingLlms.Where(llm => !retainedIds.Contains(llm.Id)))
         {
-            _dbContext.AiProviders.Remove(provider);
+            _dbContext.Llms.Remove(llm);
         }
-
-        foreach (var model in existingModels.Where(model => !retainedModelIds.Contains(model.Id)))
-        {
-            _dbContext.AiModels.Remove(model);
-        }
-
-        await _dbContext.SaveChangesAsync(ct);
 
         if (!defaultAssigned)
         {
-            var fallback = await _dbContext.AiModels
-                .OrderByDescending(model => model.IsEnabled)
-                .ThenBy(model => model.Id)
-                .FirstOrDefaultAsync(ct);
-
-            if (fallback != null)
-            {
-                fallback.IsDefault = true;
-                await _dbContext.SaveChangesAsync(ct);
-            }
+            var fallback = normalizedLlms.FirstOrDefault(llm => llm.IsEnabled) ?? normalizedLlms[0];
+            var trackedFallback = fallback.Id > 0 && existingById.TryGetValue(fallback.Id, out var existing)
+                ? existing
+                : _dbContext.Llms.Local.First(llm => llm.Key == fallback.Key);
+            trackedFallback.IsDefault = true;
         }
 
+        await _dbContext.SaveChangesAsync(ct);
         return await GetSnapshotAsync(ct);
     }
 
-    public async Task<HomeAppAgentModelConfiguration> GetResolvedModelAsync(string? requestedModelKey, CancellationToken ct = default)
+    public async Task<HomeAppAgentModelConfiguration> GetResolvedModelAsync(
+        string? requestedModelKey,
+        CancellationToken ct = default)
     {
-        var models = _dbContext.AiModels
-            .AsNoTracking()
-            .Include(model => model.Provider)
-            .Where(model => model.IsEnabled && model.Provider != null && model.Provider.IsEnabled);
-
-        AiModelConfiguration? model = null;
+        var models = _dbContext.Llms.AsNoTracking().Where(llm => llm.IsEnabled);
+        LlmConfiguration? llm = null;
 
         if (!string.IsNullOrWhiteSpace(requestedModelKey))
         {
-            model = await models.FirstOrDefaultAsync(item => item.Key == requestedModelKey, ct);
+            llm = await models.FirstOrDefaultAsync(item => item.Key == requestedModelKey, ct);
         }
 
-        model ??= await models
-            .OrderByDescending(item => item.IsDefault)
+        llm ??= await models.OrderByDescending(item => item.IsDefault)
             .ThenBy(item => item.Id)
             .FirstOrDefaultAsync(ct);
 
-        if (model?.Provider == null)
+        if (llm == null)
         {
-            throw new InvalidOperationException("No enabled AI model is configured. Update the AI settings page first.");
+            throw new InvalidOperationException("No enabled LLM is configured. Add one on the AI settings page first.");
         }
 
+        var parameters = ParseParams(llm.ParamsJson);
         return new HomeAppAgentModelConfiguration(
-            model.Id,
-            model.Key,
-            model.Name,
-            model.Provider.Key,
-            model.Provider.Name,
-            model.Provider.ProviderType,
-            model.ModelId,
-            model.Provider.BaseUrl,
-            ResolveApiKey(model.Provider),
-            model.Temperature,
-            model.MaxOutputTokens,
-            model.Provider.ConfigurationJson,
-            model.ConfigurationJson);
+            llm.Id,
+            llm.Key,
+            llm.Name,
+            NormalizeKey(llm.Provider, llm.Provider),
+            llm.Provider,
+            llm.ModelName,
+            llm.BaseUrl,
+            ResolveApiKey(llm.ApiKeyName),
+            parameters.Temperature,
+            parameters.MaxOutputTokens,
+            llm.ParamsJson);
     }
 
-    private static string? ResolveApiKey(AiProviderConfiguration provider)
+    private static void Copy(LlmWriteModel source, LlmConfiguration target, bool isDefault)
     {
-        if (string.IsNullOrWhiteSpace(provider.ApiKeyEnvironmentVariableName))
+        target.Key = source.Key;
+        target.Name = source.Name;
+        target.ModelName = source.ModelName;
+        target.Provider = source.Provider;
+        target.BaseUrl = source.BaseUrl;
+        target.ApiKeyName = source.ApiKeyName;
+        target.ParamsJson = source.ParamsJson;
+        target.IsEnabled = source.IsEnabled;
+        target.IsDefault = isDefault;
+    }
+
+    private static string? ResolveApiKey(string apiKeyName)
+    {
+        if (string.IsNullOrWhiteSpace(apiKeyName))
         {
             return null;
         }
 
-        return Environment.GetEnvironmentVariable(provider.ApiKeyEnvironmentVariableName)?.Trim();
+        var apiKey = Environment.GetEnvironmentVariable(apiKeyName)?.Trim();
+        return !string.IsNullOrWhiteSpace(apiKey)
+            ? apiKey
+            : throw new InvalidOperationException(
+                $"The API key environment variable '{apiKeyName}' is not configured.");
     }
 
-    private static IEnumerable<AiProviderWriteModel> NormalizeProviders(IEnumerable<AiProviderWriteModel> providers)
+    private static IEnumerable<LlmWriteModel> NormalizeLlms(IEnumerable<LlmWriteModel> llms)
     {
+        if (llms is null) throw new AiSettingsValidationException("Provide an LLM configuration list.");
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var provider in providers)
+        var seenIds = new HashSet<int>();
+        foreach (var llm in llms)
         {
-            var key = NormalizeKey(provider.Key, provider.Name);
-            if (!seenKeys.Add(key))
+            if (llm is null || string.IsNullOrWhiteSpace(llm.Name) ||
+                string.IsNullOrWhiteSpace(llm.ModelName) ||
+                string.IsNullOrWhiteSpace(llm.Provider))
             {
-                continue;
+                throw new AiSettingsValidationException("Every LLM requires a name, model name and provider.");
             }
 
-            yield return provider with
+            if (llm.Id < 0 || (llm.Id > 0 && !seenIds.Add(llm.Id)))
+                throw new AiSettingsValidationException("LLM IDs must be non-negative and unique.");
+
+            var key = NormalizeKey(llm.Key, llm.Name);
+            if (!seenKeys.Add(key))
+            {
+                throw new AiSettingsValidationException("LLM keys must be unique.");
+            }
+
+            var paramsJson = NormalizeOptional(llm.ParamsJson);
+            _ = ParseParams(paramsJson);
+            yield return llm with
             {
                 Key = key,
-                Name = provider.Name.Trim(),
-                BaseUrl = NormalizeBaseUrl(provider.BaseUrl),
-                ApiKeyEnvironmentVariableName = provider.ApiKeyEnvironmentVariableName.Trim(),
-                ConfigurationJson = NormalizeOptional(provider.ConfigurationJson)
+                Name = llm.Name.Trim(),
+                ModelName = llm.ModelName.Trim(),
+                Provider = llm.Provider.Trim(),
+                BaseUrl = NormalizeBaseUrl(llm.BaseUrl),
+                ApiKeyName = llm.ApiKeyName?.Trim() ?? "",
+                ParamsJson = paramsJson
             };
         }
     }
 
-    private static IEnumerable<AiModelWriteModel> NormalizeModels(IEnumerable<AiModelWriteModel> models)
+    private static LlmParams ParseParams(string? paramsJson)
     {
-        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var model in models)
+        if (string.IsNullOrWhiteSpace(paramsJson))
         {
-            if (string.IsNullOrWhiteSpace(model.Name) || string.IsNullOrWhiteSpace(model.ModelId))
+            return new LlmParams(null, null);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(paramsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                continue;
+                throw new AiSettingsValidationException("LLM params must be a JSON object.");
             }
 
-            var key = NormalizeKey(model.Key, model.Name);
-            if (!seenKeys.Add(key))
+            var root = document.RootElement;
+            double? temperature = null;
+            int? maxOutputTokens = null;
+
+            if (root.TryGetProperty("temperature", out var temperatureValue) &&
+                temperatureValue.ValueKind != JsonValueKind.Null)
             {
-                continue;
+                if (temperatureValue.ValueKind != JsonValueKind.Number ||
+                    !temperatureValue.TryGetDouble(out var value) || !double.IsFinite(value))
+                    throw new AiSettingsValidationException("temperature must be a finite number.");
+                temperature = Math.Clamp(value, 0, 2);
             }
 
-            yield return model with
+            if (root.TryGetProperty("maxOutputTokens", out var tokensValue) &&
+                tokensValue.ValueKind != JsonValueKind.Null)
             {
-                Key = key,
-                Name = model.Name.Trim(),
-                ProviderKey = NormalizeKey(model.ProviderKey, model.ProviderKey),
-                ModelId = model.ModelId.Trim(),
-                Temperature = NormalizeTemperature(model.Temperature),
-                MaxOutputTokens = model.MaxOutputTokens is > 0 ? model.MaxOutputTokens : null,
-                ConfigurationJson = NormalizeOptional(model.ConfigurationJson)
-            };
+                if (tokensValue.ValueKind != JsonValueKind.Number ||
+                    !tokensValue.TryGetInt32(out var value) || value <= 0)
+                    throw new AiSettingsValidationException("maxOutputTokens must be a positive 32-bit integer.");
+                maxOutputTokens = value;
+            }
+
+            return new LlmParams(temperature, maxOutputTokens);
+        }
+        catch (JsonException exception)
+        {
+            throw new AiSettingsValidationException("LLM params must contain valid JSON.", exception);
         }
     }
 
-    private static string NormalizeBaseUrl(string value)
+    private static string NormalizeBaseUrl(string? value)
     {
-        var trimmed = value.Trim().TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(trimmed))
+        var trimmed = value?.Trim().TrimEnd('/') ?? "";
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo) ||
+            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
         {
-            throw new InvalidOperationException("Provider base URL is required.");
+            throw new AiSettingsValidationException("Provide an absolute HTTP or HTTPS LLM base URL without credentials, a query or fragment.");
         }
 
         return $"{trimmed}/";
@@ -362,26 +240,9 @@ public sealed class AiSettingsService : IHomeAppAgentModelCatalog
     private static string NormalizeKey(string? requestedKey, string fallback)
     {
         var source = string.IsNullOrWhiteSpace(requestedKey) ? fallback : requestedKey;
-        var normalized = new string(source
-            .Trim()
-            .ToLowerInvariant()
-            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
-            .ToArray())
-            .Trim('-');
-
-        return string.IsNullOrWhiteSpace(normalized)
-            ? Guid.NewGuid().ToString("n")
-            : normalized;
-    }
-
-    private static double? NormalizeTemperature(double? temperature)
-    {
-        if (temperature is null)
-        {
-            return null;
-        }
-
-        return Math.Clamp(temperature.Value, 0, 2);
+        var normalized = new string(source.Trim().ToLowerInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()).Trim('-');
+        return string.IsNullOrWhiteSpace(normalized) ? Guid.NewGuid().ToString("n") : normalized;
     }
 
     private static string? NormalizeOptional(string? value)
@@ -391,40 +252,22 @@ public sealed class AiSettingsService : IHomeAppAgentModelCatalog
     }
 }
 
-public sealed record AiSettingsSnapshot(
-    IReadOnlyList<AiProviderConfiguration> Providers,
-    IReadOnlyList<AiModelConfiguration> Models);
+public sealed record AiSettingsSnapshot(IReadOnlyList<LlmConfiguration> Llms);
+public sealed record AiSettingsUpdate(IReadOnlyList<LlmWriteModel> Llms);
 
-public sealed record AiSettingsUpdate(
-    IReadOnlyList<AiProviderWriteModel> Providers,
-    IReadOnlyList<AiModelWriteModel> Models);
-
-public sealed record AiProviderWriteModel(
+public sealed record LlmWriteModel(
     int Id,
     string Key,
     string Name,
-    AiProviderType ProviderType,
+    string ModelName,
+    string Provider,
     string BaseUrl,
-    string ApiKeyEnvironmentVariableName,
+    string ApiKeyName,
+    string? ParamsJson,
     bool IsEnabled,
-    string? ConfigurationJson);
+    bool IsDefault);
 
-public sealed record AiModelWriteModel(
-    int Id,
-    string Key,
-    string Name,
-    string ProviderKey,
-    string ModelId,
-    bool IsEnabled,
-    bool IsDefault,
-    double? Temperature,
-    int? MaxOutputTokens,
-    string? ConfigurationJson);
+internal sealed record LlmParams(double? Temperature, int? MaxOutputTokens);
 
-public sealed record AiProviderTemplate(
-    AiProviderType ProviderType,
-    string Key,
-    string Name,
-    string DefaultBaseUrl,
-    string DefaultApiKeyEnvironmentVariableName,
-    string Description);
+public sealed class AiSettingsValidationException(string message, Exception? innerException = null)
+    : ArgumentException(message, innerException);

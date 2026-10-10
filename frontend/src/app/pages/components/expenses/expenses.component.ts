@@ -1,3 +1,6 @@
+import { DatePickerModule } from 'primeng/datepicker';
+import { FormsModule } from '@angular/forms';
+import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MessageService } from 'primeng/api';
@@ -63,7 +66,8 @@ type ReportGroupDrilldown = {
   selector: 'app-expenses',
   templateUrl: './expenses.component.html',
   styleUrls: ['./expenses.component.scss'],
-  standalone: false
+  standalone: true,
+  imports: [CommonModule, FormsModule, DatePickerModule]
 })
 export class ExpensesComponent implements OnInit {
   readonly reportMonthOptions = [
@@ -912,7 +916,7 @@ export class ExpensesComponent implements OnInit {
 
   formatMoney(amount: number | null | undefined, currencyCode?: string | null): string {
     const value = typeof amount === 'number' ? amount : 0;
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(undefined, {
       style: 'currency',
       currency: currencyCode || this.settings().defaultCurrencyCode || 'USD'
     }).format(value);
@@ -984,7 +988,7 @@ export class ExpensesComponent implements OnInit {
       return 'Selected month';
     }
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(undefined, {
       month: 'long',
       year: 'numeric'
     }).format(new Date(Date.UTC(year, monthIndex - 1, 1)));

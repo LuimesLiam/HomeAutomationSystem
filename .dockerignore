@@ -12,3 +12,39 @@ __pycache__
 *.sqlite
 .vscode
 *.DS_Store
+
+# Private database migrations and personal dashboard seeds
+/private-migrations/
+**/commute-settings.json*
+
+# Exclude generated caches that can contain prior local configuration.
+**/bin/
+**/obj/
+**/.angular/
+
+# Private commute database seeds
+/.devcontainer/private-migrations/
+
+# Local environments, credentials and private runtime data never enter builds.
+**/.env
+**/.env.*
+**/*.env
+**/secrets.json
+**/credentials.json
+**/appsettings.*.json
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.snk
+**/*.db
+**/*.sqlite3
+**/.aws/
+**/.codex/
+**/.agents/
+**/recorded_videos/
+**/media-library-settings.json
+/deploy/
+/dotnet/runfile-discovery/

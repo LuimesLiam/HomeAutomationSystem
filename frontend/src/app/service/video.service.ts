@@ -19,43 +19,21 @@ export interface MediaSyncCandidate {
   episode?: number | null;
 }
 
-export interface AiProviderTypeOption {
-  value: number;
-  key: string;
-  name: string;
-  defaultBaseUrl: string;
-  defaultApiKeyEnvironmentVariableName: string;
-  description: string;
-}
-
-export interface AiProviderSettingsItem {
+export interface LlmSettingsItem {
   id: number;
   key: string;
   name: string;
-  providerType: number;
+  modelName: string;
+  provider: string;
   baseUrl: string;
-  apiKeyEnvironmentVariableName: string;
-  isEnabled: boolean;
-  configurationJson?: string | null;
-}
-
-export interface AiModelSettingsItem {
-  id: number;
-  key: string;
-  name: string;
-  providerKey: string;
-  modelId: string;
+  apiKeyName: string;
+  paramsJson?: string | null;
   isEnabled: boolean;
   isDefault: boolean;
-  temperature?: number | null;
-  maxOutputTokens?: number | null;
-  configurationJson?: string | null;
 }
 
 export interface AiSettingsResponse {
-  providers: AiProviderSettingsItem[];
-  models: AiModelSettingsItem[];
-  providerTypes: AiProviderTypeOption[];
+  llms: LlmSettingsItem[];
 }
 
 export interface AiChatMessage {

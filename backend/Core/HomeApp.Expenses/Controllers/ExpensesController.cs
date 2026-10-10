@@ -1,10 +1,9 @@
+using HomeApp.Library.Imaging;
+using ImageMagick;
 using HomeApp.Expenses.Data;
 using HomeApp.Expenses.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Processing;
 
 namespace HomeApp.Expenses.Controllers;
 
@@ -542,7 +541,7 @@ public sealed class ExpensesController : ControllerBase
         return memory.ToArray();
     }
 
-    private static async Task<ProcessedReceiptImage> ProcessReceiptImageAsync(IFormFile? file, CancellationToken ct)
+    internal static async Task<ProcessedReceiptImage> ProcessReceiptImageAsync(IFormFile? file, CancellationToken ct)
     {
         var bytes = await ReadBytesAsync(file, ct);
         if (bytes.IsEmpty)
@@ -552,7 +551,7 @@ public sealed class ExpensesController : ControllerBase
 
         try
         {
-            using var image = Image.Load(bytes.Span);
+            using var image = RasterImage.Read(bytes.Span);
             const int maxDimension = 1600;
             var resizeRatio = Math.Min(
                 maxDimension / (double)image.Width,
@@ -562,25 +561,20 @@ public sealed class ExpensesController : ControllerBase
             {
                 var width = Math.Max(1, (int)Math.Round(image.Width * resizeRatio));
                 var height = Math.Max(1, (int)Math.Round(image.Height * resizeRatio));
-                image.Mutate(ctx => ctx.Resize(new ResizeOptions
-                {
-                    Mode = ResizeMode.Max,
-                    Size = new Size(width, height),
-                    Sampler = KnownResamplers.Lanczos3
-                }));
+                image.FilterType = FilterType.Lanczos;
+                image.Resize(new MagickGeometry((uint)width, (uint)height) { IgnoreAspectRatio = true });
             }
 
-            image.Metadata.ExifProfile = null;
+            image.RemoveProfile("exif");
 
             using var output = new MemoryStream();
-            await image.SaveAsJpegAsync(output, new JpegEncoder
-            {
-                Quality = 75
-            }, ct);
+            ct.ThrowIfCancellationRequested();
+            image.Quality = 75;
+            image.Write(output, MagickFormat.Jpeg);
 
             return new ProcessedReceiptImage(output.ToArray(), "image/jpeg");
         }
-        catch (UnknownImageFormatException)
+        catch (NotSupportedException)
         {
             var fallbackContentType = string.IsNullOrWhiteSpace(file?.ContentType)
                 ? null

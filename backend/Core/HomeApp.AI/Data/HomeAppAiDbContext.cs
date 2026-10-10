@@ -10,36 +10,25 @@ public sealed class HomeAppAiDbContext : HomeAppDbContext<HomeAppAiDbContext>
     {
     }
 
-    public DbSet<AiProviderConfiguration> AiProviders => Set<AiProviderConfiguration>();
-    public DbSet<AiModelConfiguration> AiModels => Set<AiModelConfiguration>();
+    public DbSet<LlmConfiguration> Llms => Set<LlmConfiguration>();
     public DbSet<AiChatSession> AiChatSessions => Set<AiChatSession>();
     public DbSet<AiChatSessionMessage> AiChatSessionMessages => Set<AiChatSessionMessage>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<AiProviderConfiguration>(entity =>
+        modelBuilder.Entity<LlmConfiguration>(entity =>
         {
+            entity.ToTable("llm");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Key).IsRequired();
             entity.Property(e => e.Name).IsRequired();
+            entity.Property(e => e.ModelName).IsRequired();
+            entity.Property(e => e.Provider).IsRequired();
             entity.Property(e => e.BaseUrl).IsRequired();
-            entity.Property(e => e.ApiKeyEnvironmentVariableName).IsRequired();
-            entity.Property(e => e.ProviderType).HasConversion<string>().IsRequired();
+            entity.Property(e => e.ApiKeyName).IsRequired();
+            entity.Property(e => e.ParamsJson).HasColumnType("jsonb");
             entity.HasIndex(e => e.Key).IsUnique();
-        });
-
-        modelBuilder.Entity<AiModelConfiguration>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Key).IsRequired();
-            entity.Property(e => e.Name).IsRequired();
-            entity.Property(e => e.ModelId).IsRequired();
-            entity.HasIndex(e => e.Key).IsUnique();
-            entity.HasIndex(e => new { e.ProviderId, e.ModelId });
-            entity.HasOne(e => e.Provider)
-                .WithMany(e => e.Models)
-                .HasForeignKey(e => e.ProviderId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.Provider, e.ModelName });
         });
 
         modelBuilder.Entity<AiChatSession>(entity =>

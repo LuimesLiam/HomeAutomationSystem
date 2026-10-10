@@ -1,5 +1,4 @@
 using System.ClientModel;
-using HomeApp.AI.Data;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -74,9 +73,6 @@ public sealed class HomeAppAgentFactory : IHomeAppAgentFactory
             return model.ApiKey;
         }
 
-        return model.ProviderType == AiProviderType.Ollama
-            ? "ollama"
-            : throw new InvalidOperationException(
-                $"Provider '{model.ProviderName}' requires an API key environment variable to be configured.");
+        return "api-key-not-required";
     }
 }

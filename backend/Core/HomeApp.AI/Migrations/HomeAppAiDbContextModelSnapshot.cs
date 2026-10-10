@@ -95,7 +95,7 @@ namespace HomeApp.AI.Migrations
                     b.ToTable("AiChatSessionMessages");
                 });
 
-            modelBuilder.Entity("HomeApp.AI.Data.AiModelConfiguration", b =>
+            modelBuilder.Entity("HomeApp.AI.Data.LlmConfiguration", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -103,7 +103,12 @@ namespace HomeApp.AI.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("ConfigurationJson")
+                    b.Property<string>("ApiKeyName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsDefault")
@@ -116,10 +121,7 @@ namespace HomeApp.AI.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("MaxOutputTokens")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ModelId")
+                    b.Property<string>("ModelName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -127,53 +129,10 @@ namespace HomeApp.AI.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("ProviderId")
-                        .HasColumnType("integer");
+                    b.Property<string>("ParamsJson")
+                        .HasColumnType("jsonb");
 
-                    b.Property<double?>("Temperature")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Key")
-                        .IsUnique();
-
-                    b.HasIndex("ProviderId", "ModelId");
-
-                    b.ToTable("AiModels");
-                });
-
-            modelBuilder.Entity("HomeApp.AI.Data.AiProviderConfiguration", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ApiKeyEnvironmentVariableName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("BaseUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConfigurationJson")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProviderType")
+                    b.Property<string>("Provider")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -182,7 +141,9 @@ namespace HomeApp.AI.Migrations
                     b.HasIndex("Key")
                         .IsUnique();
 
-                    b.ToTable("AiProviders");
+                    b.HasIndex("Provider", "ModelName");
+
+                    b.ToTable("llm", (string)null);
                 });
 
             modelBuilder.Entity("HomeApp.AI.Data.AiChatSessionMessage", b =>
@@ -196,25 +157,9 @@ namespace HomeApp.AI.Migrations
                     b.Navigation("Session");
                 });
 
-            modelBuilder.Entity("HomeApp.AI.Data.AiModelConfiguration", b =>
-                {
-                    b.HasOne("HomeApp.AI.Data.AiProviderConfiguration", "Provider")
-                        .WithMany("Models")
-                        .HasForeignKey("ProviderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Provider");
-                });
-
             modelBuilder.Entity("HomeApp.AI.Data.AiChatSession", b =>
                 {
                     b.Navigation("Messages");
-                });
-
-            modelBuilder.Entity("HomeApp.AI.Data.AiProviderConfiguration", b =>
-                {
-                    b.Navigation("Models");
                 });
 #pragma warning restore 612, 618
         }

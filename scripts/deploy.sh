@@ -78,7 +78,7 @@ meshnet_proxy_service="${meshnet_proxy_service:-homeapp-meshnet-proxy}"
 vlc_host_service_enabled="${VLC_HOST_SERVICE_ENABLED:-$(read_env VLC_HOST_SERVICE_ENABLED)}"
 vlc_host_service_enabled="${vlc_host_service_enabled:-true}"
 app_bind_ip="${APP_BIND_IP:-$(read_env APP_BIND_IP)}"
-app_bind_ip="${app_bind_ip:-0.0.0.0}"
+app_bind_ip="${app_bind_ip:-127.0.0.1}"
 
 install_meshnet_proxy() {
   local service_name="$1"

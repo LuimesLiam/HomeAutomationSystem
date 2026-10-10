@@ -1,3 +1,5 @@
+using HomeApp.Library.Imaging;
+using ImageMagick;
 using Microsoft.AspNetCore.Mvc;
 using HomeApp.Videos.Logic;
 using HomeApp.Videos.Data;
@@ -8,9 +10,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.IO;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Formats.Jpeg;
 using HomeApp.Videos.DTOs;
 
 namespace HomeApp.Videos.Controllers;
@@ -547,14 +546,14 @@ public class TvController : ControllerBase
 
     private byte[] DownsampleImage(byte[] original, int width)
     {
-        using var image = Image.Load(original);
+        using var image = RasterImage.Read(original);
         var ratio = (double)width / image.Width;
         var height = (int)(image.Height * ratio);
         
-        image.Mutate(x => x.Resize(width, height));
+        image.Resize((uint)width, (uint)Math.Max(1, height));
         
         using var ms = new MemoryStream();
-        image.Save(ms, new JpegEncoder());
+        image.Write(ms, MagickFormat.Jpeg);
         return ms.ToArray();
     }
 

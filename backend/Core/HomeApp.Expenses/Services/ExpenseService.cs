@@ -32,8 +32,6 @@ public sealed class ExpenseService
         "CENTER",
         "CENTRE",
         "LOCATION",
-        "CANADA",
-        "CA",
         "INC",
         "LTD",
         "LIMITED",
@@ -97,8 +95,8 @@ public sealed class ExpenseService
                 new ExpenseGroup { Key = "utilities", Name = "Utilities", Color = "#7c3aed", DisplayOrder = 6 },
                 new ExpenseGroup { Key = "subs", Name = "Subs", Color = "#db2777", DisplayOrder = 7 },
                 new ExpenseGroup { Key = "car-insurance", Name = "Car insurance", Color = "#dc2626", DisplayOrder = 8 },
-                new ExpenseGroup { Key = "personal-liam", Name = "Personal - Liam", Color = "#0891b2", DisplayOrder = 9 },
-                new ExpenseGroup { Key = "personal-sophia", Name = "Personal - Sophia", Color = "#9333ea", DisplayOrder = 10 },
+                new ExpenseGroup { Key = "personal-1", Name = "Personal - Person 1", Color = "#0891b2", DisplayOrder = 9 },
+                new ExpenseGroup { Key = "personal-2", Name = "Personal - Person 2", Color = "#9333ea", DisplayOrder = 10 },
                 new ExpenseGroup { Key = "fun", Name = "fun", Color = "#ea580c", DisplayOrder = 11 },
                 new ExpenseGroup { Key = "dept", Name = "Dept", Color = "#1f2937", DisplayOrder = 12 }
             ]);
@@ -128,23 +126,16 @@ public sealed class ExpenseService
 
         var settings = await GetSettingsEntityAsync(ct);
         var aiSettings = await _aiSettingsService.GetSnapshotAsync(ct);
-        var enabledProvidersById = aiSettings.Providers
-            .Where(provider => provider.IsEnabled)
-            .ToDictionary(provider => provider.Id);
-        var models = aiSettings.Models
-            .Where(model => model.IsEnabled && enabledProvidersById.ContainsKey(model.ProviderId))
+        var models = aiSettings.Llms
+            .Where(model => model.IsEnabled)
             .OrderByDescending(model => model.IsDefault)
             .ThenBy(model => model.Name)
-            .Select(model =>
-            {
-                var provider = enabledProvidersById[model.ProviderId];
-                return new ExpenseModelOption(
-                    model.Key,
-                    model.Name,
-                    model.ModelId,
-                    provider.Name,
-                    model.IsDefault);
-            })
+            .Select(model => new ExpenseModelOption(
+                model.Key,
+                model.Name,
+                model.ModelName,
+                model.Provider,
+                model.IsDefault))
             .ToList();
 
         var expenseQuery = _dbContext.ExpenseEntries
@@ -1481,10 +1472,7 @@ internal static class ExpenseAnalysisChatClientFactory
     {
         var apiKey = !string.IsNullOrWhiteSpace(model.ApiKey)
             ? model.ApiKey
-            : model.ProviderType == AiProviderType.Ollama
-                ? "ollama"
-                : throw new InvalidOperationException(
-                    $"Provider '{model.ProviderName}' requires an API key environment variable to be configured.");
+            : "api-key-not-required";
 
         var client = new OpenAIChatClient(
             model.RemoteModelId,

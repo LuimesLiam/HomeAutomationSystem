@@ -2,22 +2,41 @@
 
 This repo now uses tagged container images for the app and Docker Compose for the laptop deployment. That keeps the deployment simple for a local-network app while still giving you immutable, tag-based releases.
 
+## Access boundaries
+
+The app has no built-in user authentication. Compose binds the app to
+`127.0.0.1` by default (`APP_BIND_IP`) and database/monitoring ports to
+`127.0.0.1` (`ADMIN_BIND_IP`). Keep admin ports local. Use an SSH tunnel or a
+private VPN for remote access; an internet-facing deployment needs a reverse
+proxy that authenticates every application route and API request and terminates
+TLS. CORS does not provide access control.
+
+For a trusted private interface, set `APP_BIND_IP` to that interface's IP and
+restrict access through the host firewall. Explicitly changing it to `0.0.0.0`
+exposes all host interfaces. The Meshnet proxy can expose its private address
+while Docker continues to bind to localhost.
+
 ## Build and Push From the Development PC
 
 1. Set the image repository and tag:
 
    ```bash
-   export APP_IMAGE_REPOSITORY=ghcr.io/your-user/homeapp
+   export APP_IMAGE_REPOSITORY=docker.io/YOUR_USERNAME/homeapp
    export IMAGE_TAG=2026-07-03
    ```
 
-2. Build and push:
+2. Sign in to Docker Hub on the development PC, then build and push:
 
    ```bash
+   docker login
    ./scripts/build-and-push-image.sh
    ```
 
+The target is the private Docker Hub repository `YOUR_USERNAME/homeapp`. Repository visibility is managed in Docker Hub; these scripts do not change it.
+
 You can also put `APP_IMAGE_REPOSITORY` and `IMAGE_TAG` in `.env` and run the same script. For one-off local use, a full `APP_IMAGE` or `APP_IMAGE_REF` such as `homeapp:local` still works.
+
+To use a separate deployment environment file, create `.env.deployment` from `.env.example`, configure the deployment host paths and secrets (including `POSTGRES_CONNECTION` with `Host=postgres`), and pass `ENV_FILE=.env.deployment` to both build and deployment commands. An `APP_IMAGE_REF` override takes precedence over the repository and tag.
 
 Build without the camera service:
 
@@ -29,9 +48,10 @@ BUILD_WITH_CAMERAS=false IMAGE_TAG=2026-07-03 ./scripts/build-and-push-image.sh
 
 1. Copy `.env.example` to `.env` on the laptop and set the paths/secrets for that machine.
 
-2. Deploy a tag:
+2. Sign in to Docker Hub on the laptop using an account with access to `YOUR_USERNAME/homeapp`, then deploy the same tag you built:
 
    ```bash
+   docker login
    IMAGE_TAG=2026-07-03 ./scripts/deploy.sh
    ```
 
@@ -101,8 +121,8 @@ add `/mnt/drive1/Movies` or `/mnt/drive1/TV` in the Video Library Sources screen
 Camera devices are optional. The base deployment does not mount `/dev/video*`, so the app can run on machines without cameras. To enable cameras on a host that has them, build the image with the camera services and deploy with the camera compose override:
 
 ```bash
-BUILD_WITH_CAMERAS=true IMAGE_TAG=2026-07-03 ./scripts/build-and-push-image.sh
-COMPOSE_FILE_EXTRA=./docker-compose.cameras.yml IMAGE_TAG=2026-07-03 ./scripts/deploy.sh
+BUILD_WITH_CAMERAS=true IMAGE_TAG=2026-10-09 ./scripts/build-and-push-image.sh
+COMPOSE_FILE_EXTRA=./docker-compose.cameras.yml IMAGE_TAG=2026-10-09 ./scripts/deploy.sh
 ```
 
 ## Useful Commands
