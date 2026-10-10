@@ -1,7 +1,7 @@
 # ----------------------------
 # Stage 1: Build Angular frontend
 # ----------------------------
-FROM node:24-bookworm-slim AS frontend-build
+FROM node:25-bookworm-slim AS frontend-build
 WORKDIR /app
 
 # Install frontend dependencies
