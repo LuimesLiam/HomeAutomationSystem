@@ -15,3 +15,23 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+          - "@angular-devkit/*"
+
+  - package-ecosystem: "nuget"
+    directory: "/backend/Core"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: weekly

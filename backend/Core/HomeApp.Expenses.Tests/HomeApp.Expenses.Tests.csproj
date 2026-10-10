@@ -18,5 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HomeApp.Expenses\HomeApp.Expenses.csproj" />
+    <ProjectReference Include="..\HomeApp.Videos\HomeApp.Videos.csproj" />
   </ItemGroup>
 </Project>

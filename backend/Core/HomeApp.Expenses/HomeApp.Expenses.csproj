@@ -15,7 +15,6 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +24,11 @@
   <ItemGroup>
     <ProjectReference Include="..\HomeApp.AI\HomeApp.AI.csproj" />
     <ProjectReference Include="..\..\Library\Database\Database.csproj" />
+    <ProjectReference Include="..\..\Library\Imaging\Imaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HomeApp.Expenses.Tests" />
   </ItemGroup>
 
 </Project>

@@ -4,6 +4,9 @@
     "name": "C# (.NET) and PostgreSQL",
     "dockerComposeFile": "docker-compose.yml",
     "service": "app",
+    // Tool paths are already set in the image; avoid the failing VS Code shell probe.
+    "userEnvProbe": "none",
+    "initializeCommand": ["bash", ".devcontainer/initialize-env.sh"],
 	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 	"features": {
 		"ghcr.io/devcontainers/features/dotnet:2": {},
@@ -44,7 +47,6 @@
 						"host": "postgres",
 						"port": 5432,
 						"user": "postgres",
-						"password": "postgres",
 						"database": "postgres",
 						"displayName": "HomeApp PostgreSQL",
 						"ssl": {
@@ -65,7 +67,7 @@
 	// }
 
     // Use 'postCreateCommand' to run commands after the container is created.
-    "postCreateCommand": "pip install -r backend/PythonServices/requirements.txt && pip install opencv-python --break-system-packages && cd frontend && npm ci && bash set-dotnet-secrets.sh",
+    "postCreateCommand": "pip install -r backend/PythonServices/requirements.txt && pip install opencv-python --break-system-packages && cd frontend && npm ci",
 
   "forwardPorts": [
     7096, // Endpoint (GraphQL) HTTPS

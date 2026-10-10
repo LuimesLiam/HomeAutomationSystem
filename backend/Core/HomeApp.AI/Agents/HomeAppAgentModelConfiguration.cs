@@ -1,5 +1,3 @@
-using HomeApp.AI.Data;
-
 namespace HomeApp.AI;
 
 public sealed record HomeAppAgentModelConfiguration(
@@ -8,11 +6,9 @@ public sealed record HomeAppAgentModelConfiguration(
     string ModelName,
     string ProviderKey,
     string ProviderName,
-    AiProviderType ProviderType,
     string RemoteModelId,
     string BaseUrl,
     string? ApiKey,
     double? Temperature,
     int? MaxOutputTokens,
-    string? ProviderConfigurationJson,
-    string? ModelConfigurationJson);
+    string? ParamsJson);

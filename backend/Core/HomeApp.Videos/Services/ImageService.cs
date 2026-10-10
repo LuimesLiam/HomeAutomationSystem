@@ -1,6 +1,5 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Formats.Jpeg;
+using HomeApp.Library.Imaging;
+using ImageMagick;
 using Microsoft.Extensions.Logging;
 
 namespace HomeApp.Videos.Services;
@@ -47,7 +46,7 @@ public class ImageService : IImageService
     {
         try
         {
-            using var image = Image.Load(imageData);
+            using var image = RasterImage.Read(imageData);
             
             // Calculate new dimensions maintaining aspect ratio
             var ratio = (double)maxWidth / image.Width;
@@ -57,14 +56,15 @@ public class ImageService : IImageService
             // Don't upscale
             if (ratio > 1)
             {
-                newWidth = image.Width;
-                newHeight = image.Height;
+                newWidth = (int)image.Width;
+                newHeight = (int)image.Height;
             }
 
-            image.Mutate(x => x.Resize(newWidth, newHeight));
+            image.Resize((uint)newWidth, (uint)Math.Max(1, newHeight));
 
             using var output = new MemoryStream();
-            image.Save(output, new JpegEncoder { Quality = 80 });
+            image.Quality = 80;
+            image.Write(output, MagickFormat.Jpeg);
             return output.ToArray();
         }
         catch (Exception ex)

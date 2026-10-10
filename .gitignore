@@ -519,3 +519,28 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 backend/Core/HomeApp.Host/media-library-settings.json
+
+# Additional private runtime data and local tooling
+.agents/
+.aws/
+.codex
+dotnet/runfile-discovery/
+deploy/
+recorded_videos/
+*.sqlite
+*.sqlite3
+*.db
+*.env
+
+# Local Commute Monitor route settings
+**/data/commute-settings.json
+**/data/commute-settings.json.tmp
+
+# Private database migrations and personal dashboard seeds
+/private-migrations/
+
+# Private commute database seeds
+/.devcontainer/private-migrations/
+
+# Deployment-specific port locations; never commit location catalogues.
+/frontend/src/assets/vessel-ports.private.json

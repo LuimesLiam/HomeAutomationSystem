@@ -1,27 +1,35 @@
-# WebApp
+# HomeApp frontend
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 17.0.1.
+Angular 21 and PrimeNG 21 provide the HomeApp interface. Node.js 24 is pinned
+in the repository's `.nvmrc`. See the [project README](../README.md) for backend,
+database and deployment setup.
 
-## Development server
+```bash
+npm ci
+npm start
+```
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+Open http://localhost:4200. During development, the browser sends API requests
+to the same host on port 5000. Run the backend before using data-backed pages.
 
-## Code scaffolding
+```bash
+npm run build -- --configuration production
+npm test -- --watch=false
+npm run test:vessels
+npm audit
+```
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+Unit tests use Angular's Vitest runner. Vessel tests use Node's TypeScript
+support. The production Docker image serves `dist/web-app/browser` through
+ASP.NET Core; the separate Node SSR server is optional.
 
-## Build
+The browser smoke test uses synthetic intercepted data. Install Playwright
+outside the app and set `PLAYWRIGHT_MODULE_PATH` to its `index.mjs`, then run:
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+COMMUTE_UI_ONLY=1 COMMUTE_BASE_URL=http://localhost:4200 \
+  node e2e/commute-smoke.mjs
+```
 
-## Running unit tests
-
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+Private destination catalogues belong in the ignored
+`src/assets/vessel-ports.private.json`; see [Commute Monitor](../docs/commute-monitor.md).

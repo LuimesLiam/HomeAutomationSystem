@@ -1,3 +1,5 @@
+import { FormsModule } from '@angular/forms';
+import { CommonModule } from '@angular/common';
 import { Component, OnInit, SecurityContext, signal } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { marked } from 'marked';
@@ -5,7 +7,7 @@ import {
   AiChatMessage,
   AiChatSessionDetail,
   AiChatSessionSummary,
-  AiModelSettingsItem,
+  LlmSettingsItem,
   VideoService
 } from '../../../service/video.service';
 
@@ -19,7 +21,8 @@ type RenderedChatMessage = AiChatMessage & {
   selector: 'app-ai-chat',
   templateUrl: './ai-chat.component.html',
   styleUrls: ['./ai-chat.component.scss'],
-  standalone: false
+  standalone: true,
+  imports: [CommonModule, FormsModule]
 })
 export class AiChatComponent implements OnInit {
   readonly loadingModels = signal(false);
@@ -29,7 +32,7 @@ export class AiChatComponent implements OnInit {
   readonly errorMessage = signal('');
   readonly selectedModelKey = signal('');
   readonly selectedSessionId = signal<number | null>(null);
-  readonly models = signal<AiModelSettingsItem[]>([]);
+  readonly models = signal<LlmSettingsItem[]>([]);
   readonly sessions = signal<AiChatSessionSummary[]>([]);
   readonly messages = signal<RenderedChatMessage[]>([]);
 
@@ -56,7 +59,7 @@ export class AiChatComponent implements OnInit {
 
     this.videoService.getAiSettings().subscribe({
       next: (settings) => {
-        const enabledModels = (settings.models ?? []).filter((model) => model.isEnabled);
+        const enabledModels = (settings.llms ?? []).filter((model) => model.isEnabled);
         this.models.set(enabledModels);
 
         const defaultModel = enabledModels.find((model) => model.isDefault) ?? enabledModels[0];
@@ -138,7 +141,7 @@ export class AiChatComponent implements OnInit {
       content,
       modelKey: selectedModelKey,
       modelName: selectedModel?.name,
-      providerName: selectedModel?.providerKey
+      providerName: selectedModel?.provider
     });
 
     const pendingAssistant = this.createRenderedMessage({
@@ -146,7 +149,7 @@ export class AiChatComponent implements OnInit {
       content: '',
       modelKey: selectedModelKey,
       modelName: selectedModel?.name,
-      providerName: selectedModel?.providerKey
+      providerName: selectedModel?.provider
     });
 
     this.messages.set([...this.messages(), userMessage, pendingAssistant]);
@@ -204,7 +207,7 @@ export class AiChatComponent implements OnInit {
     return session.id;
   }
 
-  trackByModel(_: number, model: AiModelSettingsItem): number {
+  trackByModel(_: number, model: LlmSettingsItem): number {
     return model.id;
   }
 
