@@ -48,6 +48,10 @@ resolve_image_ref() {
   fi
 
   image_repo="${legacy_image:-ghcr.io/your-user/homeapp}"
+  # IMAGE_TAG replaces a legacy tag; registry ports are part of the repository.
+  if image_has_tag "${image_repo}"; then
+    image_repo="${image_repo%:*}"
+  fi
   tag="${raw_tag:-latest}"
   printf '%s:%s\n' "${image_repo}" "${tag}"
 }

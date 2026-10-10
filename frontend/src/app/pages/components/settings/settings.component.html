@@ -1,7 +1,7 @@
 <div class="settings-page">
   <div class="settings-header">
     <h1 class="page-title">Settings</h1>
-    <p class="page-subtitle">Keep AI provider setup, agent model behavior, and video library controls in their own spaces.</p>
+    <p class="page-subtitle">Manage database-backed LLMs and video library controls.</p>
   </div>
 
   <div class="settings-section-nav" aria-label="Settings sections">
@@ -15,13 +15,6 @@
     <button
       class="section-tab"
       type="button"
-      [class.section-tab-active]="isActiveSection('agent')"
-      (click)="setActiveSection('agent')">
-      Agent
-    </button>
-    <button
-      class="section-tab"
-      type="button"
       [class.section-tab-active]="isActiveSection('video')"
       (click)="setActiveSection('video')">
       Video
@@ -30,261 +23,87 @@
 
   <div class="settings-grid" *ngIf="isActiveSection('ai')">
     <section class="settings-card settings-card-wide">
-      <h2 class="card-title">AI Providers</h2>
-      <p class="card-description">Configure provider endpoints, API key environment variable names, and any provider-specific arguments.</p>
+      <h2 class="card-title">LLMs</h2>
+      <p class="card-description">Each row maps directly to the <code>llm</code> table. API keys remain in environment variables; only their names are stored.</p>
 
       <div class="spinner-row" *ngIf="loadingAiSettings()">
         <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
-        <span>Loading AI settings...</span>
-      </div>
-
-      <div class="provider-templates" *ngIf="!loadingAiSettings()">
-        <div class="template-chip" *ngFor="let providerType of aiProviderTypes(); trackBy: trackByProviderType">
-          <strong>{{ providerType.name }}</strong>
-          <span>{{ providerType.description }}</span>
-        </div>
+        <span>Loading LLM settings...</span>
       </div>
 
       <div class="ai-section" *ngIf="!loadingAiSettings()">
         <div class="source-group-header">
-          <label class="limit-label">Providers</label>
-          <button class="secondary-button" type="button" (click)="addAiProvider()">Add Provider</button>
+          <label class="limit-label">Configured models</label>
+          <button class="secondary-button" type="button" (click)="addLlm()">Add LLM</button>
         </div>
 
-        <div class="ai-provider-card" *ngFor="let provider of aiProviders(); let i = index; trackBy: trackByIndex">
+        <div class="ai-provider-card" *ngFor="let llm of llms(); let i = index; trackBy: trackByIndex">
           <div class="form-row two-column">
             <label class="field-block">
-              <span class="limit-label">Provider type</span>
-              <select
-                class="limit-input"
-                [ngModel]="provider.providerType"
-                (ngModelChange)="updateAiProviderField(i, 'providerType', +$event)">
-                <option *ngFor="let providerType of aiProviderTypes(); trackBy: trackByProviderType" [ngValue]="providerType.value">
-                  {{ providerType.name }}
-                </option>
-              </select>
+              <span class="limit-label">Key</span>
+              <input class="limit-input" type="text" [ngModel]="llm.key"
+                (ngModelChange)="updateLlmField(i, 'key', $event)" placeholder="openai-gpt-4o-mini" />
             </label>
-
-            <label class="field-block inline-toggle">
-              <span class="limit-label">Enabled</span>
-              <input
-                type="checkbox"
-                [ngModel]="provider.isEnabled"
-                (ngModelChange)="updateAiProviderField(i, 'isEnabled', !!$event)" />
-            </label>
-          </div>
-
-          <div class="form-row two-column">
-            <label class="field-block">
-              <span class="limit-label">Provider key</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="provider.key"
-                (ngModelChange)="updateAiProviderField(i, 'key', $event)"
-                placeholder="openai" />
-            </label>
-
             <label class="field-block">
               <span class="limit-label">Display name</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="provider.name"
-                (ngModelChange)="updateAiProviderField(i, 'name', $event)"
-                placeholder="OpenAI" />
-            </label>
-          </div>
-
-          <div class="form-row two-column">
-            <label class="field-block">
-              <span class="limit-label">Base URL</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="provider.baseUrl"
-                (ngModelChange)="updateAiProviderField(i, 'baseUrl', $event)"
-                placeholder="https://api.openai.com/v1/" />
-            </label>
-
-            <label class="field-block">
-              <span class="limit-label">API key env var name</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="provider.apiKeyEnvironmentVariableName"
-                (ngModelChange)="updateAiProviderField(i, 'apiKeyEnvironmentVariableName', $event)"
-                placeholder="OPENAI_API_KEY" />
-            </label>
-          </div>
-
-          <label class="field-block">
-            <span class="limit-label">Provider args JSON</span>
-            <textarea
-              class="limit-input code-input"
-              rows="3"
-              [ngModel]="provider.configurationJson"
-              (ngModelChange)="updateAiProviderField(i, 'configurationJson', $event)"
-              placeholder='{"organization":"optional"}'></textarea>
-          </label>
-
-          <button class="danger-button align-self-start" type="button" (click)="removeAiProvider(i)">Remove Provider</button>
-        </div>
-      </div>
-
-      <button class="action-button" type="button" (click)="saveAiSettings()" [disabled]="savingAiSettings() || loadingAiSettings()">
-        Save AI Settings
-      </button>
-
-      <div class="spinner-row" *ngIf="savingAiSettings()">
-        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
-        <span>Saving AI settings...</span>
-      </div>
-
-      <div class="status-row" *ngIf="aiSettingsMessage()">
-        {{ aiSettingsMessage() }}
-      </div>
-    </section>
-  </div>
-
-  <div class="settings-grid" *ngIf="isActiveSection('agent')">
-    <section class="settings-card settings-card-wide">
-      <h2 class="card-title">Agent Models</h2>
-      <p class="card-description">Choose which provider each agent model uses, tune defaults, and control model-level arguments.</p>
-
-      <div class="spinner-row" *ngIf="loadingAiSettings()">
-        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
-        <span>Loading agent settings...</span>
-      </div>
-
-      <div class="ai-section" *ngIf="!loadingAiSettings()">
-        <div class="source-group-header">
-          <label class="limit-label">Models</label>
-          <button class="secondary-button" type="button" (click)="addAiModel()">Add Model</button>
-        </div>
-
-        <div class="ai-provider-card" *ngFor="let model of aiModels(); let i = index; trackBy: trackByIndex">
-          <div class="form-row two-column">
-            <label class="field-block">
-              <span class="limit-label">Model key</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="model.key"
-                (ngModelChange)="updateAiModelField(i, 'key', $event)"
-                placeholder="openai-gpt-4o-mini" />
-            </label>
-
-            <label class="field-block">
-              <span class="limit-label">Display name</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="model.name"
-                (ngModelChange)="updateAiModelField(i, 'name', $event)"
-                placeholder="GPT-4o mini" />
+              <input class="limit-input" type="text" [ngModel]="llm.name"
+                (ngModelChange)="updateLlmField(i, 'name', $event)" placeholder="GPT-4o mini" />
             </label>
           </div>
 
           <div class="form-row two-column">
             <label class="field-block">
               <span class="limit-label">Provider</span>
-              <select
-                class="limit-input"
-                [ngModel]="model.providerKey"
-                (ngModelChange)="updateAiModelField(i, 'providerKey', $event)">
-                <option *ngFor="let provider of aiProviders(); trackBy: trackByIndex" [ngValue]="provider.key">
-                  {{ provider.name || provider.key }}
-                </option>
-              </select>
+              <input class="limit-input" type="text" [ngModel]="llm.provider"
+                (ngModelChange)="updateLlmField(i, 'provider', $event)" placeholder="OpenAI" />
             </label>
-
             <label class="field-block">
-              <span class="limit-label">Remote model id</span>
-              <input
-                class="limit-input"
-                type="text"
-                [ngModel]="model.modelId"
-                (ngModelChange)="updateAiModelField(i, 'modelId', $event)"
-                placeholder="gpt-4o-mini" />
+              <span class="limit-label">Model name</span>
+              <input class="limit-input" type="text" [ngModel]="llm.modelName"
+                (ngModelChange)="updateLlmField(i, 'modelName', $event)" placeholder="gpt-4o-mini" />
+            </label>
+          </div>
+
+          <div class="form-row two-column">
+            <label class="field-block">
+              <span class="limit-label">Base URL</span>
+              <input class="limit-input" type="text" [ngModel]="llm.baseUrl"
+                (ngModelChange)="updateLlmField(i, 'baseUrl', $event)" placeholder="https://api.openai.com/v1/" />
+            </label>
+            <label class="field-block">
+              <span class="limit-label">API key name</span>
+              <input class="limit-input" type="text" [ngModel]="llm.apiKeyName"
+                (ngModelChange)="updateLlmField(i, 'apiKeyName', $event)" placeholder="OPENAI_API_KEY" />
             </label>
           </div>
 
           <div class="form-row three-column">
             <label class="field-block inline-toggle">
               <span class="limit-label">Enabled</span>
-              <input
-                type="checkbox"
-                [ngModel]="model.isEnabled"
-                (ngModelChange)="updateAiModelField(i, 'isEnabled', !!$event)" />
+              <input type="checkbox" [ngModel]="llm.isEnabled"
+                (ngModelChange)="updateLlmField(i, 'isEnabled', !!$event)" />
             </label>
-
             <label class="field-block inline-toggle">
               <span class="limit-label">Default</span>
-              <input
-                type="radio"
-                name="defaultModel"
-                [checked]="model.isDefault"
-                (change)="updateAiModelField(i, 'isDefault', true)" />
-            </label>
-
-            <div class="field-block helper-text">
-              <span class="limit-label">Default selection</span>
-              <span>Exactly one enabled model should be the default fallback.</span>
-            </div>
-          </div>
-
-          <div class="form-row two-column">
-            <label class="field-block">
-              <span class="limit-label">Temperature</span>
-              <input
-                class="limit-input"
-                type="number"
-                min="0"
-                max="2"
-                step="0.1"
-                [ngModel]="model.temperature"
-                (ngModelChange)="updateAiModelField(i, 'temperature', +$event)" />
-            </label>
-
-            <label class="field-block">
-              <span class="limit-label">Max output tokens</span>
-              <input
-                class="limit-input"
-                type="number"
-                min="1"
-                step="1"
-                [ngModel]="model.maxOutputTokens"
-                (ngModelChange)="updateAiModelField(i, 'maxOutputTokens', +$event)" />
+              <input type="radio" name="defaultLlm" [checked]="llm.isDefault"
+                (change)="updateLlmField(i, 'isDefault', true)" />
             </label>
           </div>
 
           <label class="field-block">
-            <span class="limit-label">Model args JSON</span>
-            <textarea
-              class="limit-input code-input"
-              rows="3"
-              [ngModel]="model.configurationJson"
-              (ngModelChange)="updateAiModelField(i, 'configurationJson', $event)"
-              placeholder='{"reasoning":"balanced"}'></textarea>
+            <span class="limit-label">Params JSON</span>
+            <textarea class="limit-input code-input" rows="3" [ngModel]="llm.paramsJson"
+              (ngModelChange)="updateLlmField(i, 'paramsJson', $event)"
+              placeholder='{"temperature":0.2,"maxOutputTokens":1200}'></textarea>
           </label>
-
-          <button class="danger-button align-self-start" type="button" (click)="removeAiModel(i)">Remove Model</button>
+          <button class="danger-button align-self-start" type="button" (click)="removeLlm(i)">Remove LLM</button>
         </div>
       </div>
 
       <button class="action-button" type="button" (click)="saveAiSettings()" [disabled]="savingAiSettings() || loadingAiSettings()">
-        Save Agent Settings
+        Save LLM Settings
       </button>
-
-      <div class="spinner-row" *ngIf="savingAiSettings()">
-        <p-progressspinner [style]="{ width: '20px', height: '20px' }"></p-progressspinner>
-        <span>Saving agent settings...</span>
-      </div>
-
-      <div class="status-row" *ngIf="aiSettingsMessage()">
-        {{ aiSettingsMessage() }}
-      </div>
+      <div class="status-row" *ngIf="aiSettingsMessage()">{{ aiSettingsMessage() }}</div>
     </section>
   </div>
 
@@ -524,6 +343,6 @@
   </div>
 
   <div class="sync-note">
-    AI settings store provider and model metadata in Postgres, while API keys stay in environment variables only.
+    LLM metadata and params are stored in Postgres; API key values stay in environment variables only.
   </div>
 </div>

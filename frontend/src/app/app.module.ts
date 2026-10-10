@@ -1,4 +1,4 @@
-import { NgModule } from '@angular/core';
+import { NgModule, provideZoneChangeDetection } from '@angular/core';
 import { BrowserModule, provideClientHydration } from '@angular/platform-browser';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -17,9 +17,6 @@ import { SeriesListComponent } from './pages/components/series-list/series-list.
 import { SeriesDetailComponent } from './pages/components/series-detail/series-detail.component';
 import { MoviesTableComponent } from './pages/components/movies-table/movies-table.component';
 import { TvTableComponent } from './pages/components/tv-table/tv-table.component';
-import { SettingsComponent } from './pages/components/settings/settings.component';
-import { AiChatComponent } from './pages/components/ai-chat/ai-chat.component';
-import { ExpensesComponent } from './pages/components/expenses/expenses.component';
 
 import { providePrimeNG } from 'primeng/config';
 import Aura from '@primeuix/themes/aura';
@@ -46,10 +43,7 @@ import { MessageService } from 'primeng/api';
     SeriesListComponent,
     SeriesDetailComponent,
     MoviesTableComponent,
-    TvTableComponent,
-    SettingsComponent,
-    AiChatComponent,
-    ExpensesComponent
+    TvTableComponent
   ],
   imports: [
     BrowserModule,
@@ -69,6 +63,7 @@ import { MessageService } from 'primeng/api';
     ToastModule
   ],
   providers: [
+    provideZoneChangeDetection(),
     MessageService,
     provideHttpClient(withFetch()),
     provideClientHydration(),

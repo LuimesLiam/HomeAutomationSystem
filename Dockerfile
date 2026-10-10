@@ -1,14 +1,14 @@
 # ----------------------------
 # Stage 1: Build Angular frontend
 # ----------------------------
-FROM node:20-bullseye AS frontend-build
+FROM node:24-bookworm-slim AS frontend-build
 WORKDIR /app
 
 # Install frontend dependencies
 COPY frontend/package*.json ./
 
-# Prefer reproducible installs, but let local image builds recover if the lockfile is stale.
-RUN if [ -f package-lock.json ]; then npm ci || npm install; else npm install; fi
+# Release builds use the reviewed lockfile and fail if it is stale.
+RUN npm ci
 
 # Copy the rest of the Angular app
 COPY frontend/ .
@@ -20,14 +20,16 @@ RUN if [ -f dist/web-app/browser/index.csr.html ]; then mv dist/web-app/browser/
 # ----------------------------
 # Stage 2: Build .NET backend
 # ----------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS backend-build
 WORKDIR /src
 
 # Copy & publish your ASP.NET Core app
 COPY backend/ .
+# The runtime starts the DLL with dotnet; omit an Alpine-specific native launcher.
 RUN dotnet publish Core/HomeApp.Host/HomeApp.Host.csproj \
     -c Release \
     -f net10.0 \
+    -p:UseAppHost=false \
     -o /app/publish
 
 # ----------------------------

@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      POSTGRES_CONNECTION: "Host=postgres;Port=5432;Database=postgres;Username=postgres;Password=${POSTGRES_PASSWORD:?Run initialize-env.sh first}"
     # devices:
     #   - /dev/video0:/dev/video0
     #   - /dev/video1:/dev/video1
@@ -22,8 +24,8 @@ services:
     networks:
       - backend
     ports:
-      - "4200:4200"
-      - "5000:5000"
+      - "127.0.0.1:4200:4200"
+      - "127.0.0.1:5000:5000"
 
     # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
     #network_mode: service:db
@@ -37,42 +39,39 @@ services:
 
   postgres:
     image: postgres:17.4
-    container_name: postgres
     restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local environment}"
       POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     # Expose for debugging / host‐side clients if you ever need it
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     networks:
       - backend
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: pgadmin
     restart: unless-stopped
     volumes:
       - ./database/pgAdminPreferences.json:/pgadmin4/preferences.json
       - ./database/pgAdminServers.json:/pgadmin4/servers.json
     environment:
       PGADMIN_CONFIG_SERVER_MODE: "False"
-      PGADMIN_DEFAULT_EMAIL: "admin@domain.com"
-      PGADMIN_DEFAULT_PASSWORD: "admin"
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL:-admin@example.com}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in your local environment}"
     depends_on:
       - postgres
     # Expose the pgAdmin web UI on localhost:15432
     ports:
-      - "15433:80"
+      - "127.0.0.1:15433:80"
     networks:
       - backend
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: prometheus-dev
     restart: unless-stopped
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -81,7 +80,7 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     ports:
-      - "9091:9090"
+      - "127.0.0.1:9091:9090"
     depends_on:
       - loki
     networks:
@@ -89,30 +88,28 @@ services:
 
   loki:
     image: grafana/loki:3.4.2
-    container_name: loki-dev
     restart: unless-stopped
     command: -config.file=/etc/loki/config.yml
     volumes:
       - ./monitoring/loki/config.yml:/etc/loki/config.yml:ro
       - loki-data:/loki
     ports:
-      - "3101:3100"
+      - "127.0.0.1:3101:3100"
     networks:
       - backend
 
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana-dev
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in your local environment}"
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     depends_on:
       - prometheus
       - loki

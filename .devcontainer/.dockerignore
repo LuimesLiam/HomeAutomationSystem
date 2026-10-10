@@ -1,0 +1,29 @@
+.env
+.env.*
+
+# Private commute database seeds
+/private-migrations/
+
+# Local environments, credentials and private runtime data never enter builds.
+**/.env
+**/.env.*
+**/*.env
+**/secrets.json
+**/credentials.json
+**/appsettings.*.json
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.snk
+**/*.db
+**/*.sqlite3
+**/.aws/
+**/.codex/
+**/.agents/
+**/recorded_videos/
+**/media-library-settings.json
+/deploy/
+/dotnet/runfile-discovery/

@@ -1,8 +1,9 @@
+import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { FormsModule } from '@angular/forms';
+import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import {
-  AiModelSettingsItem,
-  AiProviderSettingsItem,
-  AiProviderTypeOption,
+  LlmSettingsItem,
   MediaSyncCandidate,
   MediaSourceItem,
   VideoService
@@ -12,11 +13,12 @@ import {
   selector: 'app-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss'],
-  standalone: false
+  standalone: true,
+  imports: [CommonModule, FormsModule, ProgressSpinnerModule]
 })
 export class SettingsComponent implements OnInit {
-  readonly settingsSections = ['ai', 'agent', 'video'] as const;
-  readonly activeSection = signal<'ai' | 'agent' | 'video'>('ai');
+  readonly settingsSections = ['ai', 'video'] as const;
+  readonly activeSection = signal<'ai' | 'video'>('ai');
   readonly movieSyncLimit = signal(100);
   readonly tvSyncLimit = signal(100);
   readonly movieSources = signal<MediaSourceItem[]>([this.createSource()]);
@@ -43,9 +45,7 @@ export class SettingsComponent implements OnInit {
   readonly tvCandidateSort = signal('series-asc');
   readonly settingsMessage = signal('');
   readonly aiSettingsMessage = signal('');
-  readonly aiProviderTypes = signal<AiProviderTypeOption[]>([]);
-  readonly aiProviders = signal<AiProviderSettingsItem[]>([]);
-  readonly aiModels = signal<AiModelSettingsItem[]>([]);
+  readonly llms = signal<LlmSettingsItem[]>([]);
 
   constructor(private videoService: VideoService) {}
 
@@ -126,9 +126,7 @@ export class SettingsComponent implements OnInit {
 
     this.videoService.getAiSettings().subscribe({
       next: (settings) => {
-        this.aiProviderTypes.set(settings.providerTypes ?? []);
-        this.aiProviders.set(this.normalizeAiProviders(settings.providers ?? []));
-        this.aiModels.set(this.normalizeAiModels(settings.models ?? []));
+        this.llms.set(this.normalizeLlms(settings.llms ?? []));
         this.loadingAiSettings.set(false);
       },
       error: () => {
@@ -138,100 +136,44 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  addAiProvider(): void {
-    this.aiProviders.set([...this.aiProviders(), this.createProvider()]);
+  addLlm(): void {
+    this.llms.set([...this.llms(), this.createLlm()]);
   }
 
-  removeAiProvider(index: number): void {
-    const removedKey = this.aiProviders()[index]?.key;
-    this.aiProviders.set(this.aiProviders().filter((_, currentIndex) => currentIndex !== index));
-
-    if (!removedKey) {
-      return;
-    }
-
-    const remainingProviderKeys = new Set(this.aiProviders().map((provider) => provider.key));
-    const fallbackProviderKey = this.aiProviders()[0]?.key ?? '';
-
-    this.aiModels.set(
-      this.aiModels()
-        .filter((model) => model.providerKey !== removedKey)
-        .map((model) => remainingProviderKeys.has(model.providerKey)
-          ? model
-          : { ...model, providerKey: fallbackProviderKey })
-    );
-  }
-
-  addAiModel(): void {
-    this.aiModels.set([...this.aiModels(), this.createModel()]);
-  }
-
-  removeAiModel(index: number): void {
-    const next = this.aiModels().filter((_, currentIndex) => currentIndex !== index);
-    if (next.length > 0 && !next.some((model) => model.isDefault)) {
+  removeLlm(index: number): void {
+    const next = this.llms().filter((_, currentIndex) => currentIndex !== index);
+    if (next.length > 0 && !next.some((llm) => llm.isDefault)) {
       next[0] = { ...next[0], isDefault: true };
     }
-
-    this.aiModels.set(next);
+    this.llms.set(next);
   }
 
-  updateAiProviderField<K extends keyof AiProviderSettingsItem>(index: number, field: K, value: AiProviderSettingsItem[K]): void {
-    const previousProvider = this.aiProviders()[index];
-    this.aiProviders.set(this.updateItem(this.aiProviders(), index, (provider) => ({ ...provider, [field]: value })));
-
-    if (field === 'providerType') {
-      this.applyProviderTemplate(index, Number(value));
-    }
-
-    if (field === 'key') {
-      const nextKey = String(value).trim();
-      const previousKey = previousProvider?.key;
-      if (!previousKey || previousKey === nextKey) {
-        return;
-      }
-
-      this.aiModels.set(this.aiModels().map((model) =>
-        model.providerKey === previousKey
-          ? { ...model, providerKey: nextKey }
-          : model));
-    }
-  }
-
-  updateAiModelField<K extends keyof AiModelSettingsItem>(index: number, field: K, value: AiModelSettingsItem[K]): void {
+  updateLlmField<K extends keyof LlmSettingsItem>(index: number, field: K, value: LlmSettingsItem[K]): void {
     if (field === 'isDefault' && value) {
-      this.aiModels.set(this.aiModels().map((model, currentIndex) => ({ ...model, isDefault: currentIndex === index })));
+      this.llms.set(this.llms().map((llm, currentIndex) => ({ ...llm, isDefault: currentIndex === index })));
       return;
     }
-
-    this.aiModels.set(this.updateItem(this.aiModels(), index, (model) => ({ ...model, [field]: value })));
+    this.llms.set(this.updateItem(this.llms(), index, (llm) => ({ ...llm, [field]: value })));
   }
 
   saveAiSettings(): void {
-    const providers = this.compactAiProviders(this.aiProviders());
-    const models = this.compactAiModels(this.aiModels(), providers);
-
-    if (providers.length === 0) {
-      this.aiSettingsMessage.set('Add at least one enabled AI provider before saving.');
+    const llms = this.compactLlms(this.llms());
+    if (llms.length === 0) {
+      this.aiSettingsMessage.set('Add at least one LLM before saving.');
       return;
     }
 
     this.savingAiSettings.set(true);
     this.aiSettingsMessage.set('');
 
-    this.videoService.updateAiSettings({
-      providers,
-      models,
-      providerTypes: this.aiProviderTypes()
-    }).subscribe({
+    this.videoService.updateAiSettings({ llms }).subscribe({
       next: (settings) => {
-        this.aiProviderTypes.set(settings.providerTypes ?? []);
-        this.aiProviders.set(this.normalizeAiProviders(settings.providers ?? []));
-        this.aiModels.set(this.normalizeAiModels(settings.models ?? []));
-        this.aiSettingsMessage.set('AI provider and model settings saved.');
+        this.llms.set(this.normalizeLlms(settings.llms ?? []));
+        this.aiSettingsMessage.set('LLM settings saved.');
         this.savingAiSettings.set(false);
       },
-      error: () => {
-        this.aiSettingsMessage.set('Failed to save AI settings.');
+      error: (error) => {
+        this.aiSettingsMessage.set(error.error?.message ?? 'Failed to save AI settings.');
         this.savingAiSettings.set(false);
       }
     });
@@ -379,20 +321,16 @@ export class SettingsComponent implements OnInit {
     return item.path;
   }
 
-  setActiveSection(section: 'ai' | 'agent' | 'video'): void {
+  setActiveSection(section: 'ai' | 'video'): void {
     this.activeSection.set(section);
   }
 
-  isActiveSection(section: 'ai' | 'agent' | 'video'): boolean {
+  isActiveSection(section: 'ai' | 'video'): boolean {
     return this.activeSection() === section;
   }
 
   trackByIndex(index: number): number {
     return index;
-  }
-
-  trackByProviderType(_: number, providerType: AiProviderTypeOption): string {
-    return providerType.key;
   }
 
   private normalizeLimit(value: number): number | null {
@@ -476,165 +414,61 @@ export class SettingsComponent implements OnInit {
     return { id: 0, path: '' };
   }
 
-  private normalizeAiProviders(providers: AiProviderSettingsItem[]): AiProviderSettingsItem[] {
-    return providers.length > 0 ? providers : [this.createProvider()];
-  }
-
-  private normalizeAiModels(models: AiModelSettingsItem[]): AiModelSettingsItem[] {
-    const normalized = models.map((model) => ({
-      ...model,
-      temperature: model.temperature ?? null,
-      maxOutputTokens: model.maxOutputTokens ?? null,
-      configurationJson: model.configurationJson ?? ''
+  private normalizeLlms(llms: LlmSettingsItem[]): LlmSettingsItem[] {
+    const normalized = llms.map((llm) => ({
+      ...llm,
+      paramsJson: llm.paramsJson ?? ''
     }));
 
-    if (normalized.length > 0 && !normalized.some((model) => model.isDefault)) {
+    if (normalized.length > 0 && !normalized.some((llm) => llm.isDefault)) {
       normalized[0] = { ...normalized[0], isDefault: true };
     }
 
-    return normalized;
+    return normalized.length > 0 ? normalized : [this.createLlm()];
   }
 
-  private compactAiProviders(providers: AiProviderSettingsItem[]): AiProviderSettingsItem[] {
-    const seen = new Set<string>();
-
-    return providers
-      .map((provider) => ({
-        ...provider,
-        key: provider.key.trim(),
-        name: provider.name.trim(),
-        baseUrl: provider.baseUrl.trim(),
-        apiKeyEnvironmentVariableName: provider.apiKeyEnvironmentVariableName.trim(),
-        configurationJson: provider.configurationJson?.trim() ?? ''
-      }))
-      .filter((provider) => provider.key && provider.name && provider.baseUrl)
-      .filter((provider) => {
-        const key = provider.key.toLowerCase();
-        if (seen.has(key)) {
-          return false;
-        }
-
-        seen.add(key);
-        return true;
-      });
-  }
-
-  private compactAiModels(models: AiModelSettingsItem[], providers: AiProviderSettingsItem[]): AiModelSettingsItem[] {
-    const providerKeys = new Set(providers.map((provider) => provider.key.toLowerCase()));
-    const seen = new Set<string>();
+  private compactLlms(llms: LlmSettingsItem[]): LlmSettingsItem[] {
     let defaultAssigned = false;
-
-    const compact = models
-      .map((model) => ({
-        ...model,
-        key: model.key.trim(),
-        name: model.name.trim(),
-        providerKey: model.providerKey.trim(),
-        modelId: model.modelId.trim(),
-        configurationJson: model.configurationJson?.trim() ?? '',
-        temperature: this.toNullableNumber(model.temperature),
-        maxOutputTokens: this.toNullableInteger(model.maxOutputTokens)
+    const compact = llms
+      .map((llm) => ({
+        ...llm,
+        key: llm.key.trim(),
+        name: llm.name.trim(),
+        modelName: llm.modelName.trim(),
+        provider: llm.provider.trim(),
+        baseUrl: llm.baseUrl.trim(),
+        apiKeyName: llm.apiKeyName.trim(),
+        paramsJson: llm.paramsJson?.trim() ?? ''
       }))
-      .filter((model) => model.key && model.name && model.providerKey && model.modelId)
-      .filter((model) => providerKeys.has(model.providerKey.toLowerCase()))
-      .filter((model) => {
-        const key = model.key.toLowerCase();
-        if (seen.has(key)) {
-          return false;
-        }
-
-        seen.add(key);
-        return true;
-      })
-      .map((model) => {
-        const isDefault = model.isDefault && !defaultAssigned;
+      .map((llm) => {
+        const isDefault = llm.isDefault && !defaultAssigned;
         defaultAssigned = defaultAssigned || isDefault;
-        return {
-          ...model,
-          isDefault
-        };
+        return { ...llm, isDefault };
       });
 
-    if (compact.length > 0 && !compact.some((model) => model.isDefault)) {
+    if (compact.length > 0 && !compact.some((llm) => llm.isDefault)) {
       compact[0] = { ...compact[0], isDefault: true };
     }
-
     return compact;
   }
 
-  private createProvider(): AiProviderSettingsItem {
-    const template = this.aiProviderTypes()[0];
-    const baseKey = template?.key ?? 'provider';
-    return {
-      id: 0,
-      key: this.nextAvailableProviderKey(baseKey),
-      name: template?.name ?? '',
-      providerType: template?.value ?? 0,
-      baseUrl: template?.defaultBaseUrl ?? '',
-      apiKeyEnvironmentVariableName: template?.defaultApiKeyEnvironmentVariableName ?? '',
-      isEnabled: true,
-      configurationJson: ''
-    };
-  }
-
-  private createModel(): AiModelSettingsItem {
+  private createLlm(): LlmSettingsItem {
     return {
       id: 0,
       key: '',
       name: '',
-      providerKey: this.aiProviders()[0]?.key ?? '',
-      modelId: '',
+      modelName: '',
+      provider: '',
+      baseUrl: '',
+      apiKeyName: '',
+      paramsJson: '{"temperature":0.2,"maxOutputTokens":1200}',
       isEnabled: true,
-      isDefault: this.aiModels().length === 0,
-      temperature: 0.2,
-      maxOutputTokens: 1200,
-      configurationJson: ''
+      isDefault: this.llms().length === 0
     };
-  }
-
-  private applyProviderTemplate(index: number, providerTypeValue: number): void {
-    const template = this.aiProviderTypes().find((item) => item.value === providerTypeValue);
-    if (!template) {
-      return;
-    }
-
-    this.aiProviders.set(this.updateItem(this.aiProviders(), index, (provider) => ({
-      ...provider,
-      name: provider.name || template.name,
-      baseUrl: template.defaultBaseUrl,
-      apiKeyEnvironmentVariableName: template.defaultApiKeyEnvironmentVariableName
-    })));
   }
 
   private updateItem<T>(items: T[], index: number, updater: (item: T) => T): T[] {
     return items.map((item, currentIndex) => currentIndex === index ? updater(item) : item);
   }
 
-  private nextAvailableProviderKey(baseKey: string): string {
-    const normalizedBase = baseKey.trim() || 'provider';
-    const existingKeys = new Set(this.aiProviders().map((provider) => provider.key.toLowerCase()));
-    if (!existingKeys.has(normalizedBase.toLowerCase())) {
-      return normalizedBase;
-    }
-
-    let counter = 2;
-    while (existingKeys.has(`${normalizedBase}-${counter}`.toLowerCase())) {
-      counter += 1;
-    }
-
-    return `${normalizedBase}-${counter}`;
-  }
-
-  private toNullableNumber(value: number | null | undefined): number | null {
-    return value == null || !Number.isFinite(value) ? null : value;
-  }
-
-  private toNullableInteger(value: number | null | undefined): number | null {
-    if (value == null || !Number.isFinite(value)) {
-      return null;
-    }
-
-    const normalized = Math.floor(value);
-    return normalized > 0 ? normalized : null;
-  }
 }

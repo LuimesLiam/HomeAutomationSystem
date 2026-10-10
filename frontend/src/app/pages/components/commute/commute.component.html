@@ -1,0 +1,1437 @@
+<main class="commute">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">
+        <i class="pi pi-compass" aria-hidden="true"></i> HOME / COMMUTE
+      </p>
+      <h1>Commute Monitor</h1>
+      <p class="muted">
+        Road awareness. Marine approaches. A clearer trip ahead.
+      </p>
+    </div>
+    <div class="actions">
+      <button type="button" (click)="refresh()" [disabled]="loading">
+        <i class="pi pi-refresh" aria-hidden="true"></i>
+        {{ loading ? "Loading…" : "Refresh dashboard" }}</button
+      ><button
+        type="button"
+        class="primary"
+        (click)="editRoute()"
+        [disabled]="!workspace"
+      >
+        <i class="pi pi-sliders-h" aria-hidden="true"></i> Configure route
+      </button>
+    </div>
+  </header>
+  <p *ngIf="error" class="notice error" role="alert">{{ error }}</p>
+  <p *ngIf="saved" class="notice" role="status">{{ saved }}</p>
+  <div *ngIf="!data && loading" class="panel empty" role="status">
+    Loading commute dashboard…
+  </div>
+
+  <div class="tab-bar" role="tablist" aria-label="Commute dashboard tabs">
+    <button
+      id="dashboard-tab"
+      type="button"
+      role="tab"
+      [attr.aria-selected]="tab === 'dashboard'"
+      aria-controls="dashboard-content"
+      (click)="tab = 'dashboard'"
+    >
+      My dashboard
+    </button>
+    <button
+      id="map-tab"
+      type="button"
+      role="tab"
+      [attr.aria-selected]="tab === 'map'"
+      aria-controls="map-content"
+      (click)="tab = 'map'"
+    >
+      Map
+    </button>
+    <button
+      id="builder-tab"
+      type="button"
+      role="tab"
+      [attr.aria-selected]="tab === 'builder'"
+      aria-controls="builder-content"
+      (click)="tab = 'builder'"
+    >
+      Build my dashboard
+    </button>
+  </div>
+  <p *ngIf="workspaceError" class="notice error" role="alert">
+    {{ workspaceError }}
+  </p>
+  <div
+    *ngIf="tab !== 'builder' && workspace as w"
+    class="workspace-switcher actions"
+    [hidden]="tab === 'builder'"
+  >
+    <label *ngIf="w.dashboards.length"
+      >Dashboard<select
+        aria-label="Active dashboard"
+        [ngModel]="w.activeDashboardId || ''"
+        (ngModelChange)="useDashboard($event)"
+      >
+        <option value="" disabled>Select dashboard</option>
+        <option *ngFor="let profile of w.dashboards" [value]="profile.id">
+          {{ profile.name }}
+        </option>
+      </select></label
+    >
+    <label *ngIf="selectableRoutes.length"
+      >Route<select
+        aria-label="Active route"
+        [ngModel]="w.activeRouteId"
+        (ngModelChange)="useRoute($event)"
+      >
+        <option *ngFor="let route of selectableRoutes" [value]="route.id">
+          {{ route.name }}
+        </option>
+      </select></label
+    >
+  </div>
+  <div
+    id="builder-content"
+    role="tabpanel"
+    aria-labelledby="builder-tab"
+    [hidden]="tab !== 'builder'"
+  >
+    <section class="panel builder-intro">
+      <p class="eyebrow">YOUR VIEWS, YOUR ORDER</p>
+      <h2>Build my dashboard</h2>
+      <p class="muted">
+        Choose routes, pin camera views, and arrange the panels you want to see.
+        Personal settings live in your database; no route or address is written
+        into the source code.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="primary"
+          (click)="editDashboard()"
+          [disabled]="!workspace"
+        >
+          New dashboard</button
+        ><button
+          type="button"
+          (click)="editRoute(null)"
+          [disabled]="!workspace"
+        >
+          Add route
+        </button>
+      </div>
+    </section>
+    <section class="panel" *ngIf="workspace as w">
+      <div class="builder-columns">
+        <div>
+          <h2>Saved routes</h2>
+          <p *ngIf="!w.routes.length" class="muted">
+            Add your first route to start monitoring.
+          </p>
+          <article *ngFor="let r of w.routes" class="saved-entry">
+            <div>
+              <strong>{{ r.name }}</strong
+              ><small>{{ r.origin }} → {{ r.destination }}</small>
+            </div>
+            <div class="actions">
+              <button type="button" (click)="useRoute(r.id, null)">View</button
+              ><button type="button" (click)="editRoute(r)">Edit</button
+              ><button
+                type="button"
+                (click)="deletingRoute = r.id"
+                [attr.aria-label]="'Delete route ' + r.name"
+              >
+                Delete
+              </button>
+            </div>
+            <div *ngIf="deletingRoute === r.id" class="delete-confirm">
+              <span>Delete this route and remove it from saved dashboards?</span
+              ><button type="button" (click)="deleteRoute(r.id)">
+                Delete route</button
+              ><button type="button" (click)="deletingRoute = null">
+                Keep
+              </button>
+            </div>
+          </article>
+        </div>
+        <div>
+          <h2>Saved dashboards</h2>
+          <p *ngIf="!w.dashboards.length" class="muted">
+            Create a dashboard to save favorite routes and camera views.
+          </p>
+          <article *ngFor="let profile of w.dashboards" class="saved-entry">
+            <div>
+              <strong>{{ profile.name }}</strong
+              ><small
+                >{{ profile.routeIds.length }} routes ·
+                {{ profile.favoriteViews.length }} pinned views</small
+              >
+            </div>
+            <div class="actions">
+              <button type="button" (click)="useDashboard(profile.id)">
+                View</button
+              ><button type="button" (click)="editDashboard(profile)">
+                Edit</button
+              ><button
+                type="button"
+                (click)="deletingDashboard = profile.id"
+                [attr.aria-label]="'Delete dashboard ' + profile.name"
+              >
+                Delete
+              </button>
+            </div>
+            <div
+              *ngIf="deletingDashboard === profile.id"
+              class="delete-confirm"
+            >
+              <span>Delete this dashboard? Routes will be kept.</span
+              ><button type="button" (click)="deleteDashboard(profile.id)">
+                Delete dashboard</button
+              ><button type="button" (click)="deletingDashboard = null">
+                Keep
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+    <section *ngIf="profileDraft as profile" class="panel settings">
+      <div class="section-heading">
+        <h2>
+          {{
+            profile.id !== "00000000-0000-0000-0000-000000000000"
+              ? "Edit dashboard"
+              : "New dashboard"
+          }}
+        </h2>
+        <button type="button" (click)="profileDraft = null">
+          Cancel dashboard changes
+        </button>
+      </div>
+      <form (ngSubmit)="saveProfile()">
+        <label
+          >Dashboard name<input
+            name="dashboardName"
+            [(ngModel)]="profile.name"
+            maxlength="120"
+            required
+        /></label>
+        <div class="builder-columns">
+          <fieldset>
+            <legend>Favorite routes</legend>
+            <p *ngIf="!workspace?.routes?.length" class="muted">
+              Add a route first.
+            </p>
+            <label class="checkbox" *ngFor="let r of workspace?.routes"
+              ><input
+                type="checkbox"
+                [checked]="profile.routeIds.includes(r.id)"
+                (change)="
+                  toggleFavoriteRoute(r.id, $any($event.target).checked)
+                "
+              />{{ r.name }}</label
+            >
+          </fieldset>
+          <fieldset>
+            <legend>Dashboard panels</legend>
+            <label class="checkbox" *ngFor="let p of panelOptions"
+              ><input
+                type="checkbox"
+                [checked]="profile.panels.includes(p.id)"
+                (change)="togglePanel(p.id, $any($event.target).checked)"
+              />{{ p.name }}</label
+            >
+          </fieldset>
+        </div>
+        <h3>Panel order</h3>
+        <ol class="panel-order">
+          <li *ngFor="let p of profile.panels; let i = index">
+            <span>{{ panelName(p) }}</span>
+            <div class="actions">
+              <button
+                type="button"
+                (click)="movePanel(i, -1)"
+                [disabled]="i === 0"
+                [attr.aria-label]="'Move ' + panelName(p) + ' up'"
+              >
+                ↑</button
+              ><button
+                type="button"
+                (click)="movePanel(i, 1)"
+                [disabled]="i === profile.panels.length - 1"
+                [attr.aria-label]="'Move ' + panelName(p) + ' down'"
+              >
+                ↓
+              </button>
+            </div>
+          </li>
+        </ol>
+        <h3>Favorite camera views</h3>
+        <label class="checkbox"
+          ><input
+            type="checkbox"
+            name="favoritesOnly"
+            [(ngModel)]="profile.favoritesOnly"
+          />Show only pinned views in this dashboard</label
+        >
+        <p class="muted">
+          Available views come from the current route's 511 feed. Pin views
+          below or use the stars on camera cards. Favorites outside the selected
+          route are retained and appear when you switch to their route.
+        </p>
+        <div class="camera-picker">
+          <article *ngFor="let c of data?.cameras">
+            <strong>{{ c.name }}</strong
+            ><label
+              *ngFor="let view of enabledViews(c); let index = index"
+              class="checkbox"
+              ><input
+                type="checkbox"
+                [checked]="isFavorite(c.id, view.id, true)"
+                (change)="toggleView(c.id, view.id)"
+              />{{ view.description || "View " + (index + 1) }}</label
+            >
+          </article>
+        </div>
+        <p *ngIf="!data?.cameras?.length" class="notice">
+          No camera choices available yet. Select a route and ensure the 511
+          feed is configured.
+        </p>
+        <ul class="pinned-views">
+          <li *ngFor="let favorite of profile.favoriteViews">
+            <span>{{ favoriteLabel(favorite) }}</span
+            ><button
+              type="button"
+              (click)="removeDraftView(favorite)"
+              [attr.aria-label]="'Remove ' + favoriteLabel(favorite)"
+            >
+              Remove
+            </button>
+          </li>
+        </ul>
+        <p *ngIf="profileError" class="notice error" role="alert">
+          {{ profileError }}
+        </p>
+        <button type="submit" class="primary" [disabled]="profileSaving">
+          {{ profileSaving ? "Saving…" : "Save dashboard" }}
+        </button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2>Google Maps</h2>
+      <p class="muted">
+        The route link works without a key. For an in-app directions map, enable
+        Google's Maps Embed API and save a website-restricted key. The key is
+        stored in your database; embedded map keys are visible in the browser.
+        Loading a map or opening its link sends the selected route to Google.
+      </p>
+      <p class="muted">
+        {{
+          workspace?.googleMapsConfigured
+            ? "An Embed API key is configured."
+            : "No Embed API key configured."
+        }}
+      </p>
+      <form class="maps-key-form" (ngSubmit)="saveMapsKey()">
+        <label
+          >Maps Embed API key<input
+            type="password"
+            name="mapsKey"
+            [(ngModel)]="mapsKey"
+            autocomplete="off"
+            placeholder="Paste key, or leave empty to remove" /></label
+        ><button type="submit" [disabled]="mapsSaving || !workspace">
+          {{ mapsSaving ? "Saving…" : "Save Maps key" }}
+        </button>
+      </form>
+      <p *ngIf="mapsError" class="notice error" role="alert">{{ mapsError }}</p>
+      <a
+        href="https://developers.google.com/maps/documentation/embed/get-api-key"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Google Maps key setup ↗</a
+      >
+    </section>
+  </div>
+  <section
+    *ngIf="editing && draft && tab === 'builder'"
+    class="panel settings"
+    aria-labelledby="route-settings-title"
+  >
+    <div class="section-heading">
+      <h2 id="route-settings-title">Configure your corridor</h2>
+      <button type="button" (click)="editing = false" [disabled]="saving">
+        Cancel
+      </button>
+    </div>
+    <p class="muted">
+      Place waypoints along your actual road in travel order. The corridor
+      radius and road names determine which road reports appear. This is a saved
+      corridor, not a navigation or travel-time service.
+    </p>
+    <form (ngSubmit)="saveRoute()">
+      <div class="form-grid">
+        <label
+          >Route name<input
+            name="routeName"
+            [(ngModel)]="draft.name"
+            maxlength="120"
+            required
+        /></label>
+        <label
+          >Road names / aliases<input
+            name="roadways"
+            [(ngModel)]="roadwaysText"
+            placeholder="Road name, alternative name"
+            required
+        /></label>
+        <label
+          >Origin<input
+            name="origin"
+            [(ngModel)]="draft.origin"
+            maxlength="120"
+            required
+        /></label>
+        <label
+          >Destination<input
+            name="destination"
+            [(ngModel)]="draft.destination"
+            maxlength="120"
+            required
+        /></label>
+        <label
+          >Incident direction<select
+            name="direction"
+            [(ngModel)]="draft.direction"
+          >
+            <option *ngFor="let d of directions" [value]="d">{{ d }}</option>
+          </select></label
+        >
+        <label
+          >Corridor radius (km)<input
+            name="corridor"
+            type="number"
+            [(ngModel)]="draft.corridorKm"
+            min="0.1"
+            max="10"
+            step="0.1"
+            required
+        /></label>
+      </div>
+      <div class="form-grid detail-grid">
+        <label
+          >Waypoints · latitude, longitude<textarea
+            aria-label="Waypoints · latitude, longitude"
+            aria-describedby="waypoint-help"
+            name="points"
+            [(ngModel)]="pointsText"
+            rows="9"
+            spellcheck="false"
+            required
+          ></textarea
+          ><span id="waypoint-help" class="muted"
+            >One coordinate pair per line, from origin to destination.
+            <a
+              href="https://www.openstreetmap.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Find coordinates on OpenStreetMap ↗</a
+            ></span
+          ></label
+        >
+        <div>
+          <label
+            >Regional alert names
+            <input
+              name="alertRegions"
+              [(ngModel)]="alertRegionsText"
+              placeholder="Enter provider region names, separated by commas"
+            />
+          </label>
+          <p class="muted">
+            Regional alerts can cover roads beyond your corridor.
+          </p>
+        </div>
+      </div>
+      <details>
+        <summary>Marine monitoring area</summary>
+        <p class="muted">
+          Choose the bounds of the area you want to monitor. Predictions use the
+          saved bridge configuration.
+        </p>
+        <label class="checkbox"
+          ><input
+            type="checkbox"
+            name="enableMarine"
+            [checked]="marineEnabled"
+            (change)="enableMarine($any($event.target).checked)"
+          />Enable marine monitoring</label
+        >
+        <div class="form-grid" *ngIf="marineEnabled && draft.marineBounds">
+          <label
+            >South latitude<input
+              type="number"
+              name="minLat"
+              [(ngModel)]="draft.marineBounds.minLatitude"
+              step="0.001"
+              required /></label
+          ><label
+            >West longitude<input
+              type="number"
+              name="minLon"
+              [(ngModel)]="draft.marineBounds.minLongitude"
+              step="0.001"
+              required
+          /></label>
+          <label
+            >North latitude<input
+              type="number"
+              name="maxLat"
+              [(ngModel)]="draft.marineBounds.maxLatitude"
+              step="0.001"
+              required /></label
+          ><label
+            >East longitude<input
+              type="number"
+              name="maxLon"
+              [(ngModel)]="draft.marineBounds.maxLongitude"
+              step="0.001"
+              required
+          /></label>
+        </div>
+      </details>
+      <details>
+        <summary>Lift bridge configuration</summary>
+        <label class="checkbox"
+          ><input
+            type="checkbox"
+            name="enableBridge"
+            [checked]="bridgeEnabled"
+            (change)="enableBridge($any($event.target).checked)"
+          />Enable bridge estimates</label
+        >
+        <div *ngIf="bridgeEnabled && draft.bridge" class="form-grid">
+          <label
+            >Bridge name<input
+              name="bridgeName"
+              [(ngModel)]="draft.bridge.name"
+              maxlength="120"
+              required
+          /></label>
+          <label
+            >Inbound canal bearing (degrees)<input
+              name="bridgeBearing"
+              type="number"
+              [(ngModel)]="draft.bridge.inboundBearing"
+              min="0"
+              max="359"
+              required
+          /></label>
+          <label
+            >Bridge latitude<input
+              name="bridgeLat"
+              type="number"
+              [(ngModel)]="draft.bridge.position.latitude"
+              min="-90"
+              max="90"
+              step="0.0001"
+              required
+          /></label>
+          <label
+            >Bridge longitude<input
+              name="bridgeLon"
+              type="number"
+              [(ngModel)]="draft.bridge.position.longitude"
+              min="-180"
+              max="180"
+              step="0.0001"
+              required
+          /></label>
+        </div>
+        <p class="muted">
+          Bearing is the direction a vessel travels inbound through the canal.
+          Estimates also require marine monitoring and fresh AIS reports.
+        </p>
+      </details>
+      <p *ngIf="saveError" class="notice error" role="alert">{{ saveError }}</p>
+      <div class="actions form-actions">
+        <button type="submit" class="primary" [disabled]="saving">
+          {{ saving ? "Saving…" : "Save route" }}</button
+        ><button type="button" (click)="reverseRoute()" [disabled]="saving">
+          Reverse trip
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section *ngIf="data && !data.route && tab !== 'builder'" class="panel empty">
+    {{ data.summary }}
+    <button type="button" (click)="editRoute(null)">Create a route</button>
+  </section>
+  <ng-container *ngIf="data as d"
+    ><ng-container *ngIf="d.route as route">
+      <section class="route-summary panel" [hidden]="tab === 'builder'">
+        <div>
+          <p class="eyebrow">YOUR CORRIDOR</p>
+          <h2>{{ route.name }}</h2>
+          <p>
+            {{ route.origin }} <span class="route-arrow">→</span>
+            {{ route.destination }}
+          </p>
+          <button
+            type="button"
+            (click)="reverseActiveRoute()"
+            [disabled]="reversing || loading"
+          >
+            <i class="pi pi-arrow-right-arrow-left" aria-hidden="true"></i>
+            {{ reversing ? "Reversing…" : "Reverse trip" }}
+          </button>
+          <p class="muted">
+            {{ route.roadways.join(" / ") }} · {{ route.direction }} ·
+            {{ route.corridorKm }} km radius
+          </p>
+        </div>
+        <div class="status-summary">
+          <span
+            class="badge"
+            [ngClass]="statusClass(error ? 'UNKNOWN' : d.status)"
+            >{{ error ? "UNKNOWN" : d.status }}</span
+          >
+          <p>
+            {{
+              error
+                ? "Connection lost. Current conditions cannot be confirmed."
+                : d.summary
+            }}
+          </p>
+          <small class="muted"
+            >Dashboard checked {{ age(d.generatedAt) }} ·
+            {{ time(d.generatedAt) }}</small
+          >
+        </div>
+      </section>
+
+      <section
+        *ngIf="tab === 'map'"
+        id="map-content"
+        role="tabpanel"
+        aria-labelledby="map-tab"
+      >
+        <div class="map-layout">
+          <section class="panel overview" aria-labelledby="map-title">
+            <div class="section-heading">
+              <h2 id="map-title">Route map</h2>
+              <span class="muted">North ↑</span>
+            </div>
+            <app-corridor-map
+              [snapshot]="d"
+              [offline]="!!error"
+              [selectedVesselMmsi]="selectedVesselMmsi"
+              [focusVesselRequest]="vesselFocusRequest"
+              (cameraSelected)="openCamera($event)"
+              (reportSelected)="openRoadItem($event)"
+              (vesselSelected)="openVessel($event)"
+              (bridgeSelected)="openBridge()"
+            ></app-corridor-map>
+            <div class="legend">
+              <span><b class="route-key"></b> Saved route</span>
+              <span><b class="camera-key"></b> Camera</span>
+              <span
+                ><b class="danger-key"></b> Reported closure / likely lift</span
+              >
+              <span
+                ><b class="warning-key"></b> Restriction / possible lift</span
+              >
+              <span><b class="vessel-key"></b> Vessel</span>
+              <span><b class="bridge-key"></b> Lift bridge</span>
+            </div>
+            <p class="muted">
+              The teal line is your trip. Report markers show their locations;
+              select them for schedules and lane details. Gray reports have
+              unconfirmed feed freshness.
+            </p>
+            <details class="google-options">
+              <summary>Google route options</summary>
+              <div class="google-maps-actions actions">
+                <a
+                  *ngIf="maps"
+                  [href]="maps.directionsUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Open route in Google Maps ↗</a
+                ><button
+                  *ngIf="maps?.embedUrl && !embedSrc"
+                  type="button"
+                  (click)="showGoogleMap()"
+                >
+                  Load Google route map</button
+                ><button
+                  *ngIf="embedSrc"
+                  type="button"
+                  (click)="embedSrc = null"
+                >
+                  Hide Google map
+                </button>
+              </div>
+              <iframe
+                *ngIf="embedSrc"
+                [src]="embedSrc"
+                title="Google Maps directions for the selected route"
+                class="google-route-map"
+                loading="lazy"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen
+              ></iframe>
+              <p *ngIf="embedSrc" class="muted">
+                Google calculates its own driving route through the saved
+                waypoints; this may differ from the monitoring corridor. Live
+                markers appear on the OpenStreetMap above.
+              </p>
+            </details>
+          </section>
+          <aside class="panel map-issues" aria-labelledby="map-issues-title">
+            <h2 id="map-issues-title">Along your route</h2>
+            <section
+              *ngIf="mapVessel as vessel"
+              class="selected-voyage"
+              aria-label="Selected ship"
+            >
+              <h3>{{ vessel.name }}</h3>
+              <p>
+                <strong>Reported destination:</strong> {{ destination(vessel) }}
+              </p>
+              <ng-container *ngIf="voyage(vessel) as voyage">
+                <p *ngIf="voyage.port as port">
+                  <strong>Destination port:</strong> {{ port.name }},
+                  {{ port.country }}
+                  <span *ngIf="port.code">({{ port.code }})</span>
+                </p>
+                <p *ngIf="!voyage.connection" role="status">
+                  {{ voyage.unavailableReason }}
+                </p>
+              </ng-container>
+              <p class="muted">
+                The dotted purple line connects the ship to its reported
+                destination port. It shows where it is going, not the sailing
+                path. Port locations are approximate.
+              </p>
+              <div class="actions">
+                <button type="button" (click)="showSelectedVesselOnMap()">
+                  View ship on map
+                </button>
+                <button type="button" (click)="openVessel(vessel)">
+                  Ship details
+                </button>
+                <button type="button" (click)="clearSelectedVessel()">
+                  Clear ship selection
+                </button>
+              </div>
+            </section>
+            <p class="muted">
+              Select an issue here or on the map. Reports may include recurring
+              or future closures.
+            </p>
+            <p
+              *ngIf="error || feed('marine')?.state !== 'ready'"
+              class="notice"
+            >
+              Lift predictions are unavailable until fresh AIS data returns.
+            </p>
+            <button
+              *ngIf="route.bridge"
+              type="button"
+              class="issue-row"
+              (click)="openBridge()"
+            >
+              <strong>{{ route.bridge.name }}</strong
+              ><span>View lift outlook</span>
+            </button>
+            <button
+              *ngFor="let p of mapPredictions"
+              type="button"
+              class="issue-row"
+              [ngClass]="liftHighlight(p.level)"
+              (click)="openPrediction(p)"
+            >
+              <strong>{{ p.level }} lift · {{ p.vesselName }}</strong>
+              <span
+                >{{ time(p.windowStart) }}–{{ time(p.windowEnd) }} ·
+                estimate</span
+              >
+            </button>
+            <button
+              *ngFor="let item of d.items"
+              type="button"
+              class="issue-row"
+              [ngClass]="reportHighlight(item)"
+              (click)="openRoadItem(item)"
+            >
+              <strong>{{ item.title }}</strong>
+              <span
+                >{{ item.fullClosure ? "Reported full closure" : item.kind }} ·
+                {{ item.direction }}</span
+              >
+              <span *ngIf="item.lanes">Lanes: {{ item.lanes }}</span>
+              <span *ngIf="item.schedule">{{ item.schedule }}</span>
+              <span *ngIf="item.startsAt"
+                >Starts {{ date(item.startsAt) }}</span
+              >
+              <span *ngIf="!reportIsFresh(item)"
+                >Cached / freshness unconfirmed</span
+              >
+            </button>
+            <p *ngIf="!d.items.length && !mapPredictions.length" class="muted">
+              No mapped issues in the current response. Check feed status before
+              travel.
+            </p>
+          </aside>
+        </div>
+      </section>
+      <div
+        id="dashboard-content"
+        role="tabpanel"
+        aria-labelledby="dashboard-tab"
+        [hidden]="tab !== 'dashboard'"
+      >
+        <section class="feed-grid" aria-label="Data freshness">
+          <article
+            *ngFor="let f of d.feeds"
+            class="feed-card"
+            [class.degraded]="f.state !== 'ready' || !!error"
+          >
+            <div>
+              <span
+                class="feed-dot"
+                [class.live]="f.state === 'ready' && !error"
+              ></span
+              ><strong>{{ f.name }}</strong
+              ><span class="feed-state">{{
+                error ? "connection lost" : f.state
+              }}</span>
+            </div>
+            <p>{{ f.message }}</p>
+            <small
+              >Last success: {{ age(f.lastSuccess)
+              }}<span *ngIf="f.nextAttempt">
+                · Retry / refresh {{ time(f.nextAttempt) }}</span
+              ></small
+            >
+          </article>
+        </section>
+
+        <div class="dashboard-layout">
+          <section
+            class="panel dashboard-panel map-shortcut"
+            *ngIf="panelVisible('map')"
+            [style.order]="panelOrder('map')"
+          >
+            <h2>Explore the map</h2>
+            <p class="muted">
+              See the route, cameras, road reports and lift bridge alerts
+              together.
+            </p>
+            <button type="button" class="primary" (click)="tab = 'map'">
+              Open map
+            </button>
+          </section>
+          <section
+            class="panel bridge dashboard-panel"
+            *ngIf="panelVisible('bridge')"
+            [class.wide]="true"
+            [style.order]="panelOrder('bridge')"
+            aria-labelledby="bridge-title"
+          >
+            <p class="eyebrow">CONFIGURED CROSSING</p>
+            <h2 id="bridge-title">
+              {{ route.bridge?.name || "Lift bridge outlook" }}
+            </h2>
+            <p *ngIf="!route.bridge" class="notice">
+              Add a bridge location and inbound bearing to this route to enable
+              estimates.
+            </p>
+            <p class="bridge-note">
+              A predicted lift applies to the configured crossing. Check the
+              road it carries before changing your route.
+            </p>
+            <p
+              *ngIf="error || feed('marine')?.state !== 'ready'"
+              class="notice"
+            >
+              Predictions unavailable until fresh AIS data is available.
+            </p>
+            <p
+              *ngIf="
+                !error &&
+                !!route.bridge &&
+                feed('marine')?.state === 'ready' &&
+                !upcomingPredictions.length
+              "
+              class="empty compact"
+            >
+              <span class="badge low">LOW / NO APPROACH DETECTED</span><br />No
+              fresh vessel trajectory currently suggests an opening. AIS
+              coverage is incomplete; this is not confirmation that the bridge
+              will remain closed.
+            </p>
+            <article
+              *ngFor="let p of error ? [] : upcomingPredictions"
+              class="prediction"
+              [ngClass]="statusClass(p.level)"
+            >
+              <div class="section-heading">
+                <span class="badge" [ngClass]="statusClass(p.level)">{{
+                  p.level
+                }}</span
+                ><strong
+                  >{{ p.confidence }}%
+                  <small>heuristic confidence</small></strong
+                >
+              </div>
+              <h3>{{ p.vesselName }}</h3>
+              <p class="window">
+                {{ time(p.windowStart) }} – {{ time(p.windowEnd) }}
+              </p>
+              <p>{{ p.direction }} · {{ p.explanation }}</p>
+            </article>
+            <details>
+              <summary>How estimates work</summary>
+              <p>
+                Fresh positions (under five minutes), speed and course must
+                align with the canal approach. Commercial type and vessel size
+                increase the likelihood. Windows include travel uncertainty and
+                opening lead time.
+              </p>
+              <p>
+                AIS lacks air draught, bridge operator decisions and pilot
+                intentions. Confidence is a heuristic score, not a probability.
+                These are estimates, never a confirmed opening schedule.
+              </p>
+            </details>
+          </section>
+
+          <section
+            class="panel dashboard-panel"
+            *ngIf="panelVisible('reports')"
+            [style.order]="panelOrder('reports')"
+            aria-labelledby="reports-title"
+          >
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">ON YOUR ROUTE</p>
+                <h2 id="reports-title">
+                  Road reports <span class="count">{{ d.items.length }}</span>
+                </h2>
+              </div>
+              <label class="filter"
+                >Show<select [(ngModel)]="itemFilter">
+                  <option value="all">All reports</option>
+                  <option value="incident">Incidents</option>
+                  <option value="construction">Construction / closures</option>
+                  <option value="condition">Road conditions</option>
+                  <option value="alert">Regional alerts</option>
+                </select></label
+              >
+            </div>
+            <div class="empty" *ngIf="!visibleItems.length">
+              {{
+                feed("incidents")?.state === "ready"
+                  ? "No matching reports in this category. Check feed freshness above."
+                  : "No reports available in this category. Configure the road provider endpoint and key or wait for the provider to recover."
+              }}
+            </div>
+            <div class="reports">
+              <article
+                *ngFor="let item of visibleItems"
+                class="report"
+                [class.closure]="item.fullClosure"
+              >
+                <div class="report-tags">
+                  <span class="badge neutral">{{ item.kind }}</span
+                  ><span *ngIf="item.fullClosure" class="badge disrupted"
+                    >Full closure</span
+                  ><span *ngIf="item.regional" class="badge caution"
+                    >Regional scope</span
+                  ><span
+                    *ngIf="item.startsAt && item.startsAt > d.generatedAt"
+                    class="badge neutral"
+                    >Upcoming</span
+                  >
+                </div>
+                <h3>{{ item.title }}</h3>
+                <p class="muted">
+                  {{
+                    item.regional
+                      ? item.roadway.split("|").join(", ")
+                      : item.roadway
+                  }}
+                  · {{ item.direction }}
+                </p>
+                <p class="report-description">{{ item.description }}</p>
+                <p *ngIf="item.lanes">
+                  <strong>Lanes:</strong> {{ item.lanes }}
+                </p>
+                <p *ngIf="item.schedule">
+                  <strong>Schedule:</strong> {{ item.schedule }}
+                </p>
+                <p *ngIf="item.startsAt || item.endsAt" class="muted">
+                  {{ date(item.startsAt) }} → {{ date(item.endsAt) }} · May
+                  include recurring closures; review schedule.
+                </p>
+                <div class="report-footer">
+                  <small>Source updated {{ age(item.updatedAt) }}</small
+                  ><a
+                    *ngIf="item.position"
+                    [href]="mapLink(item.position)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >View location ↗</a
+                  >
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section
+            class="panel dashboard-panel"
+            *ngIf="panelVisible('cameras')"
+            [style.order]="panelOrder('cameras')"
+            aria-labelledby="cameras-title"
+          >
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">ORIGIN → DESTINATION</p>
+                <h2 id="cameras-title">
+                  Road cameras
+                  <span class="count">{{ cameraCards.length }}</span>
+                </h2>
+              </div>
+              <span class="muted">Select an image to enlarge</span>
+            </div>
+            <p class="muted">
+              Current provider snapshots, in travel order. Camera facing
+              direction may differ from your trip. Image capture timestamps are
+              not supplied by 511.
+            </p>
+            <div *ngIf="!cameraCards.length" class="empty">
+              {{
+                feed("cameras")?.state === "ready"
+                  ? "No cameras match this corridor. Check road aliases and waypoints."
+                  : "No camera views are available. Check feed freshness, route filters and pinned-view settings."
+              }}
+            </div>
+            <p *ngIf="activeProfile?.favoritesOnly" class="muted">
+              Showing pinned camera views on the selected route.
+            </p>
+            <div class="camera-grid">
+              <article
+                *ngFor="let card of cameraCards; let index = index"
+                class="camera-card"
+              >
+                <ng-container *ngIf="card.camera as c">
+                  <button
+                    class="camera-image"
+                    type="button"
+                    (click)="openCamera(c, card.view)"
+                    [attr.aria-label]="'Enlarge camera ' + c.name"
+                  >
+                    <ng-container *ngIf="card.view as view"
+                      ><img
+                        *ngIf="!failedImages.has(view.id)"
+                        [src]="cameraImage(view)"
+                        [alt]="c.name"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                        (error)="imageFailed(view.id)"
+                      /><span *ngIf="failedImages.has(view.id)"
+                        >Image unavailable · open for source link</span
+                      ></ng-container
+                    ><span *ngIf="!enabledViews(c).length"
+                      >Camera currently disabled</span
+                    ><span class="camera-number">{{ index + 1 }}</span
+                    ><span class="enlarge"
+                      ><i class="pi pi-window-maximize" aria-hidden="true"></i
+                    ></span>
+                  </button>
+                  <div class="camera-caption">
+                    <div class="section-heading">
+                      <h3>{{ c.name }}</h3>
+                      <button
+                        *ngIf="card.view as view"
+                        type="button"
+                        class="pin-button"
+                        [disabled]="profileSaving"
+                        [attr.aria-pressed]="isFavorite(c.id, view.id)"
+                        [attr.aria-label]="
+                          (isFavorite(c.id, view.id) ? 'Unpin ' : 'Pin ') +
+                          c.name
+                        "
+                        (click)="toggleView(c.id, view.id, false)"
+                      >
+                        <i
+                          class="pi"
+                          [class.pi-star-fill]="isFavorite(c.id, view.id)"
+                          [class.pi-star]="!isFavorite(c.id, view.id)"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                    </div>
+                    <p>
+                      {{ c.roadway }} ·
+                      {{ c.direction || "Facing direction unknown" }}
+                    </p>
+                    <div
+                      class="view-buttons"
+                      *ngIf="enabledViews(c).length > 0"
+                    >
+                      <button
+                        *ngFor="let view of enabledViews(c); let v = index"
+                        type="button"
+                        (click)="openCamera(c, view)"
+                      >
+                        {{ view.description || "View " + (v + 1) }}
+                      </button>
+                    </div>
+                  </div>
+                </ng-container>
+              </article>
+            </div>
+          </section>
+
+          <section
+            class="panel dashboard-panel"
+            *ngIf="panelVisible('marine')"
+            [style.order]="panelOrder('marine')"
+            aria-labelledby="marine-title"
+          >
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">CONFIGURED MARINE AREA</p>
+                <h2 id="marine-title">
+                  Marine traffic
+                  <span class="count">{{ d.vessels.length }}</span>
+                </h2>
+              </div>
+              <span class="muted">{{
+                route.bridge ? "Nearest to crossing first" : "Provider order"
+              }}</span>
+            </div>
+            <p class="muted">
+              Latest AIS reports in your marine area. Reports older than five
+              minutes do not generate lift predictions. An empty feed does not
+              establish an empty harbour.
+            </p>
+            <div *ngIf="!d.vessels.length" class="empty">
+              {{ feed("marine")?.message }}
+            </div>
+            <div class="table-scroll" *ngIf="d.vessels.length">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Vessel</th>
+                    <th>Type / size</th>
+                    <th>Speed / course</th>
+                    <th>Canal approach</th>
+                    <th>Last heard</th>
+                    <th>Position</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let v of d.vessels">
+                    <td>
+                      <strong>{{ v.name }}</strong
+                      ><small
+                        >MMSI {{ v.mmsi
+                        }}<span *ngIf="v.destination">
+                          · {{ v.destination }}</span
+                        ></small
+                      >
+                    </td>
+                    <td>
+                      {{ v.type
+                      }}<small
+                        >{{
+                          v.lengthMetres !== null
+                            ? v.lengthMetres + " m long"
+                            : "Length unknown"
+                        }}<span *ngIf="v.beamMetres">
+                          × {{ v.beamMetres }} m beam</span
+                        ></small
+                      >
+                    </td>
+                    <td>
+                      {{
+                        v.speedKnots !== null
+                          ? (v.speedKnots | number: "1.0-1") + " kn"
+                          : "Speed unknown"
+                      }}<small
+                        >Course {{ v.course !== null ? v.course + "°" : "—" }} ·
+                        Heading
+                        {{ v.heading !== null ? v.heading + "°" : "—" }}</small
+                      >
+                    </td>
+                    <td>
+                      <ng-container
+                        *ngIf="prediction(v.mmsi) as p; else noPrediction"
+                        ><span class="badge" [ngClass]="statusClass(p.level)">{{
+                          p.level
+                        }}</span
+                        ><small>{{ p.direction }}</small>
+                        <details>
+                          <summary>Reason</summary>
+                          <p>{{ p.explanation }}</p>
+                        </details></ng-container
+                      ><ng-template #noPrediction>Unavailable</ng-template>
+                    </td>
+                    <td>
+                      {{ age(v.seenAt)
+                      }}<small>{{ time(v.seenAt) }} · {{ v.source }}</small>
+                    </td>
+                    <td>
+                      <a
+                        [href]="mapLink(v.position)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >{{ v.position.latitude | number: "1.4-4" }},
+                        {{ v.position.longitude | number: "1.4-4" }} ↗</a
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <p
+          *ngIf="activeProfile && !activeProfile.panels.length"
+          class="panel empty"
+        >
+          This dashboard has no panels selected. Add views in Build my
+          dashboard.
+        </p>
+        <footer class="attribution">
+          <p>
+            Road data and images: the configured road traffic provider. Data is
+            provided as available; actual conditions may differ.
+          </p>
+          <p>
+            Marine data:
+            <a
+              href="https://openwaters.io/ais/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Open Waters AIS</a
+            >. {{ d.attribution.join(" · ") }}
+          </p>
+          <p>
+            Road feeds refresh every 2 minutes; AIS every minute; dashboard
+            every 30 seconds. All displayed times use your browser's time zone.
+            Phase 1 does not estimate traffic speed or travel time.
+          </p>
+        </footer>
+      </div></ng-container
+    ></ng-container
+  >
+</main>
+<dialog
+  #cameraDialog
+  class="camera-dialog"
+  (click)="$event.target === cameraDialog && closeCamera()"
+>
+  <div *ngIf="selectedCamera as c">
+    <div class="section-heading">
+      <h2>{{ c.name }}</h2>
+      <button
+        type="button"
+        (click)="closeCamera()"
+        aria-label="Close enlarged camera"
+      >
+        ✕
+      </button>
+    </div>
+    <p>{{ c.roadway }} · {{ c.direction }}</p>
+    <ng-container *ngIf="selectedView as view"
+      ><img
+        *ngIf="!failedImages.has(view.id)"
+        [src]="cameraImage(view)"
+        [alt]="c.name"
+        referrerpolicy="no-referrer"
+        (error)="imageFailed(view.id)"
+      />
+      <p *ngIf="failedImages.has(view.id)" class="empty">
+        The camera image could not be loaded.
+      </p>
+      <a [href]="view.url" target="_blank" rel="noopener noreferrer"
+        >Open original 511 camera image ↗</a
+      ></ng-container
+    >
+    <p *ngIf="!selectedView">No enabled view is available for this camera.</p>
+    <div class="view-buttons">
+      <button
+        type="button"
+        *ngFor="let view of enabledViews(c); let index = index"
+        (click)="selectedView = view"
+      >
+        {{ view.description || "View " + (index + 1) }}
+      </button>
+    </div>
+    <p class="muted">
+      Feed last refreshed {{ age(feed("cameras")?.lastSuccess) }}. Provider
+      image capture time is unknown.
+    </p>
+  </div>
+</dialog>
+
+<dialog
+  #mapDetailDialog
+  class="camera-dialog map-detail-dialog"
+  aria-labelledby="map-detail-title"
+  (click)="$event.target === mapDetailDialog && mapDetailDialog.close()"
+>
+  <div class="section-heading">
+    <h2 id="map-detail-title">
+      {{
+        selectedBridge
+          ? data?.route?.bridge?.name
+          : selectedVessel?.name || selectedRoadItem?.title
+      }}
+    </h2>
+    <button
+      type="button"
+      (click)="mapDetailDialog.close()"
+      aria-label="Close map details"
+    >
+      ✕
+    </button>
+  </div>
+  <ng-container *ngIf="selectedBridge">
+    <p>
+      Predictions apply to the configured lift crossing, which may be separate
+      from the road on your trip.
+    </p>
+    <p *ngIf="error || feed('marine')?.state !== 'ready'" class="notice">
+      Fresh AIS data is unavailable. Lift estimates cannot be confirmed.
+    </p>
+    <p
+      *ngIf="
+        !error && feed('marine')?.state === 'ready' && !mapPredictions.length
+      "
+    >
+      No fresh approach currently suggests a lift. AIS coverage is incomplete.
+    </p>
+    <article *ngFor="let p of mapPredictions" class="bridge-prediction">
+      <span class="badge" [ngClass]="statusClass(p.level)">{{ p.level }}</span>
+      <h3>{{ p.vesselName }}</h3>
+      <p>
+        Estimated window {{ time(p.windowStart) }}–{{ time(p.windowEnd) }} ·
+        confidence {{ p.confidence }}%
+      </p>
+      <p>{{ p.explanation }}</p>
+      <button type="button" (click)="openPrediction(p)">
+        View vessel {{ p.vesselName }}
+      </button>
+    </article>
+  </ng-container>
+  <ng-container *ngIf="selectedRoadItem as item">
+    <div class="report-tags">
+      <span class="badge neutral">{{ item.kind }}</span>
+      <span *ngIf="item.fullClosure" class="badge disrupted">Full closure</span>
+      <span *ngIf="item.regional" class="badge caution">Regional scope</span>
+    </div>
+    <p>{{ item.roadway }} · {{ item.direction }}</p>
+    <p class="report-description">{{ item.description }}</p>
+    <p *ngIf="item.lanes"><strong>Lanes:</strong> {{ item.lanes }}</p>
+    <p *ngIf="item.schedule"><strong>Schedule:</strong> {{ item.schedule }}</p>
+    <p *ngIf="item.startsAt || item.endsAt">
+      {{ date(item.startsAt) }} → {{ date(item.endsAt) }}
+    </p>
+    <p class="muted">
+      Road traffic provider · Source updated {{ age(item.updatedAt) }}.
+      Schedules may include recurring closures.
+    </p>
+    <a
+      *ngIf="item.position"
+      [href]="mapLink(item.position)"
+      target="_blank"
+      rel="noopener noreferrer"
+      >View location ↗</a
+    >
+  </ng-container>
+  <ng-container *ngIf="selectedVessel as v">
+    <p>MMSI {{ v.mmsi }} · {{ v.type }}</p>
+    <p><strong>Reported destination:</strong> {{ destination(v) }}</p>
+    <p class="muted">
+      AIS destinations are entered by the vessel and may be abbreviated or out
+      of date.
+    </p>
+    <section
+      class="selected-voyage"
+      aria-label="Ship destination port"
+      *ngIf="voyage(v) as voyage"
+    >
+      <h3>Destination on map</h3>
+      <p *ngIf="voyage.port as port">
+        <strong>Destination port:</strong> {{ port.name }}, {{ port.country }}
+        <span *ngIf="port.code">({{ port.code }})</span>
+      </p>
+      <p *ngIf="!voyage.connection" role="status">
+        {{ voyage.unavailableReason }}
+      </p>
+      <p class="muted">
+        The dotted purple line connects the ship to its reported destination
+        port. It shows where it is going, not the sailing path. Port locations
+        are approximate.
+      </p>
+      <button type="button" class="primary" (click)="showSelectedVesselOnMap()">
+        View ship on map
+      </button>
+    </section>
+    <dl>
+      <dt>Size</dt>
+      <dd>
+        {{
+          v.lengthMetres !== null
+            ? v.lengthMetres + " m long"
+            : "Length unknown"
+        }}{{ v.beamMetres !== null ? " × " + v.beamMetres + " m beam" : "" }}
+      </dd>
+      <dt>Speed</dt>
+      <dd>
+        {{
+          v.speedKnots !== null
+            ? (v.speedKnots | number: "1.0-1") + " kn"
+            : "Unknown"
+        }}
+      </dd>
+      <dt>Course / heading</dt>
+      <dd>
+        {{ v.course !== null ? v.course + "°" : "Unknown" }} /
+        {{ v.heading !== null ? v.heading + "°" : "Unknown" }}
+      </dd>
+      <dt>Position</dt>
+      <dd>
+        {{ v.position.latitude | number: "1.4-4" }},
+        {{ v.position.longitude | number: "1.4-4" }}
+      </dd>
+      <dt>Last heard</dt>
+      <dd>{{ age(v.seenAt) }} · {{ time(v.seenAt) }} · {{ v.source }}</dd>
+    </dl>
+    <div *ngIf="prediction(v.mmsi) as p">
+      <span class="badge" [ngClass]="statusClass(p.level)">{{ p.level }}</span>
+      <p>{{ p.direction }} · Confidence {{ p.confidence }}%</p>
+      <p *ngIf="p.windowStart">
+        Estimated lift window: {{ time(p.windowStart) }}–{{ time(p.windowEnd) }}
+      </p>
+      <p>{{ p.explanation }}</p>
+    </div>
+    <p *ngIf="!prediction(v.mmsi)" class="muted">
+      Lift prediction unavailable for this vessel. Check marine feed freshness
+      and bridge configuration.
+    </p>
+    <a [href]="mapLink(v.position)" target="_blank" rel="noopener noreferrer"
+      >View location ↗</a
+    >
+  </ng-container>
+</dialog>

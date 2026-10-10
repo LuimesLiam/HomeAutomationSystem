@@ -21,7 +21,7 @@
         [disabled]="loadingModels() || sending()">
         <option value="" disabled>Select a model</option>
         <option *ngFor="let model of models(); trackBy: trackByModel" [ngValue]="model.key">
-          {{ model.name }} ({{ model.providerKey }})
+          {{ model.name }} ({{ model.provider }})
         </option>
       </select>
     </label>

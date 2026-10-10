@@ -842,7 +842,7 @@
           <img *ngIf="detail.receiptImageDataUrl" [src]="detail.receiptImageDataUrl" alt="Receipt image" class="receipt-preview-image" />
           <div class="receipt-empty" *ngIf="!detail.receiptImageDataUrl">No receipt image was stored for this expense.</div>
 
-          <div class="receipt-items" *ngIf="detail.items?.length">
+          <div class="receipt-items" *ngIf="detail.items.length">
             <h3>Purchased items</h3>
             <div class="receipt-item-row" *ngFor="let item of detail.items">
               <span><strong>{{ item.canonicalName || item.name }}</strong><small *ngIf="item.name !== item.canonicalName">Receipt: {{ item.name }}</small><small *ngIf="item.quantity">{{ item.quantity }} {{ item.unit || '' }}</small></span>
