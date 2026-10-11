@@ -16,6 +16,81 @@ restrict access through the host firewall. Explicitly changing it to `0.0.0.0`
 exposes all host interfaces. The Meshnet proxy can expose its private address
 while Docker continues to bind to localhost.
 
+## Release From GitHub Actions
+
+The [release workflow](.github/workflows/release.yml) builds the existing Dockerfile
+for `linux/amd64`, pushes a versioned image to your private registry, and then
+attaches image details to the GitHub Release. For manually pushed tags without
+an existing release, it creates a release with generated change notes.
+
+In GitHub **Settings → Secrets and variables → Actions**, configure:
+
+| Kind | Name | Example / purpose |
+| --- | --- | --- |
+| Variable | `DOCKER_REGISTRY` | `registry.example.com` or `docker.io`; optional port, no URL scheme or path |
+| Variable | `DOCKER_IMAGE_REPOSITORY` | `registry.example.com/your-namespace/homeapp`; full repository, without a tag |
+| Secret | `DOCKER_USERNAME` | Registry account with push access |
+| Secret | `DOCKER_PASSWORD` | Registry access token or password |
+| Optional variable | `BUILD_WITH_CAMERAS` | `true` (default) or `false`, matching the local build option |
+
+Create the private repository in your registry first. The workflow does not
+configure repository visibility. The registry must be reachable from GitHub's
+hosted runner and use a trusted TLS certificate. Application runtime secrets
+stay in the deployment host's `.env`; they are not needed for image builds.
+The registry hostname and image reference appear in the GitHub release notes.
+
+### Automatic versioning with Release Please
+
+The [Release Please workflow](.github/workflows/release-please.yml) runs on `main`.
+It opens and updates a release PR with changes to `version.txt`, `CHANGELOG.md`
+and `.release-please-manifest.json`. The first version is `0.1.0`; `0.0.0` in
+these files is the unreleased starting point. Use Conventional Commit messages
+such as `feat: add a dashboard` and `fix: correct media playback` for commits
+(or squash-merge titles). Review the release PR and merge it when CI passes.
+Release Please then creates the version tag and GitHub Release; that tag starts
+the Docker build and push. The Docker workflow preserves Release Please's notes
+and attaches `docker-image.txt` with the image reference and digest. The release
+exists before the Docker build finishes, so wait for **Release Docker image** to
+succeed before deploying.
+
+Add one more **repository secret**, `RELEASE_PLEASE_TOKEN`: a GitHub fine-grained
+PAT scoped to this repository with **Contents**, **Issues**, and **Pull requests**
+permissions set to **Read and write**. This is separate from your Docker registry
+token. A GitHub PAT lets the generated PR trigger CI and the generated tag
+trigger the Docker workflow; the default `GITHUB_TOKEN` suppresses those runs.
+See [Release Please's token guidance](https://github.com/googleapis/release-please-action#other-actions-on-release-please-prs).
+
+### Manual version tags
+
+You can also create a release manually from a commit whose CI checks passed:
+
+```bash
+git tag -a v0.1.0 -m "HomeApp v0.1.0"
+git push origin v0.1.0
+```
+
+Subsequent releases use new tags such as `v0.1.1`. Tags such as `v0.2.0-rc.1`
+produce GitHub prereleases. The Docker tag retains the `v` prefix; no `latest`
+image tag is published. For manual tags, release creation runs only after a
+successful image push.
+The existing CI workflow runs independently; the release workflow does not wait
+for its results, so tag a validated commit.
+
+To retry a failed release, run **Actions → Release Docker image → Run workflow**
+and enter the existing tag in `release_tag`. This rebuilds and pushes that tag;
+an existing GitHub Release keeps its notes and receives updated image details. Use a new version tag for changed code.
+
+Deploy the published image using the existing scripts:
+
+```bash
+docker login registry.example.com
+APP_IMAGE_REPOSITORY=registry.example.com/your-namespace/homeapp \
+  IMAGE_TAG=v0.1.0 ./scripts/deploy.sh
+```
+
+For Docker Hub, use `docker login docker.io` and a repository such as
+`docker.io/YOUR_USERNAME/homeapp` in both GitHub settings and deployment config.
+
 ## Build and Push From the Development PC
 
 1. Set the image repository and tag:

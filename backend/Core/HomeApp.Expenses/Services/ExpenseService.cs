@@ -65,19 +65,9 @@ public sealed class ExpenseService
     {
         if (!await _dbContext.ExpenseAgentSettings.AnyAsync(ct))
         {
-            HomeAppAgentModelConfiguration? defaultModel = null;
-            try
-            {
-                defaultModel = await _modelCatalog.GetResolvedModelAsync(null, ct);
-            }
-            catch (InvalidOperationException)
-            {
-            }
-
             _dbContext.ExpenseAgentSettings.Add(new ExpenseAgentSettings
             {
-                ModelKey = defaultModel?.ModelKey,
-                DefaultCurrencyCode = "USD",
+                DefaultCurrencyCode = "CAD",
                 ExtractionPrompt = string.Empty
             });
         }
@@ -413,8 +403,15 @@ public sealed class ExpenseService
 
     public async Task<AnalyzedExpenseRecord> AnalyzeAndCreateExpenseAsync(AnalyzeExpenseRequest request, CancellationToken ct = default)
     {
+        var (extraction, _, model) = await AnalyzeExpenseCore(request, ct);
+        return await SaveReviewedExpenseAsync(request, extraction, model.ModelKey, ct);
+    }
+
+    public async Task<AnalyzedExpenseRecord> SaveReviewedExpenseAsync(
+        AnalyzeExpenseRequest request, ReceiptExpenseExtraction extraction, string modelKey, CancellationToken ct = default)
+    {
         var settings = await GetSettingsEntityAsync(ct);
-        var (extraction, groups, model) = await AnalyzeExpenseCore(request, ct);
+        var groups = await _dbContext.ExpenseGroups.Where(group => group.IsEnabled).ToListAsync(ct);
         var matchedGroupId = ResolveGroupId(groups, request.ExpenseGroupId, extraction.ClassificationGroupKey);
         var resolvedTotal = request.TotalAmount ?? extraction.TotalAmount ?? 0m;
 
@@ -441,7 +438,7 @@ public sealed class ExpenseService
                 request.FileName,
                 request.ImageBytes.IsEmpty ? null : request.ImageBytes.ToArray(),
                 request.ImageContentType,
-                model.ModelKey,
+                modelKey,
                 extraction.Confidence,
                 string.IsNullOrWhiteSpace(request.ReceiptText) ? extraction.ReceiptText : request.ReceiptText.Trim(),
                 JsonSerializer.Serialize(extraction, JsonOptions),

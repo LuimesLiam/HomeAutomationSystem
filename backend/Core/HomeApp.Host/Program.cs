@@ -18,6 +18,8 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Logs;
 using Prometheus;
 
 EnvFileLoader.LoadIntoEnvironment(Directory.GetCurrentDirectory());
@@ -45,10 +47,28 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(HomeAppTelemetry.ServiceName))
     .WithTracing(tracing => tracing
-        .AddSource(HomeAppTelemetry.ActivitySourceName)
+        .AddSource(HomeAppTelemetry.ActivitySourceName, HomeAppTelemetry.AgentSourceName,
+            "Microsoft.Agents.AI*", "Experimental.Microsoft.Agents.AI*", "Microsoft.Extensions.AI*",
+            "Experimental.Microsoft.Extensions.AI*", "Npgsql")
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter())
+    .WithMetrics(metrics => metrics
+        .AddMeter("HomeApp.*", "Microsoft.Agents.AI*", "Experimental.Microsoft.Agents.AI*",
+            "Microsoft.Extensions.AI*", "Experimental.Microsoft.Extensions.AI*",
+            "System.Runtime", "System.Net.Http", "Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel", "Npgsql")
+        .SetExemplarFilter(ExemplarFilterType.TraceBased)
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddOtlpExporter());
+
+builder.Logging.AddOpenTelemetry(logging =>
+{
+    logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(HomeAppTelemetry.ServiceName));
+    logging.IncludeFormattedMessage = true;
+    logging.IncludeScopes = true;
+    logging.AddOtlpExporter();
+});
 
 builder.Services.AddCors(options =>
 {
