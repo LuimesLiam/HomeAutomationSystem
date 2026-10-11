@@ -10,6 +10,17 @@ on:
         description: Existing version tag to release (for example v0.1.0)
         required: true
         type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing version tag created by Release Please
+        required: true
+        type: string
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
 
 permissions:
   contents: read

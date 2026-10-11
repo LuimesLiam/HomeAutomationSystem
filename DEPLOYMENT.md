@@ -47,18 +47,24 @@ and `.release-please-manifest.json`. The first version is `0.1.0`; `0.0.0` in
 these files is the unreleased starting point. Use Conventional Commit messages
 such as `feat: add a dashboard` and `fix: correct media playback` for commits
 (or squash-merge titles). Review the release PR and merge it when CI passes.
-Release Please then creates the version tag and GitHub Release; that tag starts
-the Docker build and push. The Docker workflow preserves Release Please's notes
+Release Please then creates the version tag and GitHub Release and calls
+the Docker build workflow directly. The Docker workflow preserves Release Please's notes
 and attaches `docker-image.txt` with the image reference and digest. The release
-exists before the Docker build finishes, so wait for **Release Docker image** to
-succeed before deploying.
+exists before the Docker build finishes, so wait for the **docker** job in
+**Release Please** to succeed before deploying.
 
-Add one more **repository secret**, `RELEASE_PLEASE_TOKEN`: a GitHub fine-grained
-PAT scoped to this repository with **Contents**, **Issues**, and **Pull requests**
-permissions set to **Read and write**. This is separate from your Docker registry
-token. A GitHub PAT lets the generated PR trigger CI and the generated tag
-trigger the Docker workflow; the default `GITHUB_TOKEN` suppresses those runs.
-See [Release Please's token guidance](https://github.com/googleapis/release-please-action#other-actions-on-release-please-prs).
+Release Please uses GitHub's built-in `github-actions[bot]` identity and its
+automatically supplied `GITHUB_TOKEN`; no GitHub PAT or `RELEASE_PLEASE_TOKEN`
+secret is needed. Enable **Settings → Actions → General → Workflow permissions →
+Allow GitHub Actions to create and approve pull requests** so the bot can open
+release PRs. The workflow does not approve or merge PRs for you.
+
+Bot-created tags do not trigger another workflow, so the Docker builder is a
+reusable workflow called from the same run. When Release Please opens or updates
+its PR, it explicitly dispatches **Build and test** and **Secret scan** against
+the release branch so the changes receive checks before merging. This uses the
+built-in token's `actions: write` permission. See
+[GitHub's workflow trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow).
 
 ### Manual version tags
 

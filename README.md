@@ -206,8 +206,9 @@ history secret scanning. Dependabot checks npm, NuGet, Docker, development
 containers, and Actions updates weekly.
 
 **Release flow:** Conventional Commits on `main` → Release Please version and
-changelog PR → merge the release PR → version tag → Docker build and push to
-the private registry. The Docker workflow attaches the image reference and digest
+changelog PR → merge the release PR → version tag and a direct Docker build and
+push to the private registry. Release Please uses GitHub's built-in bot account;
+no GitHub PAT is required. The Docker workflow attaches the image reference and digest
 to the GitHub Release. See [release setup](DEPLOYMENT.md#release-from-github-actions)
 for variables, tokens, and manual retries.
 

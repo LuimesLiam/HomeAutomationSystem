@@ -7,9 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: release-please-main
@@ -20,21 +18,45 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - name: Check GitHub release token
-        shell: bash
-        env:
-          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-        run: |
-          if [[ -z "$RELEASE_PLEASE_TOKEN" ]]; then
-            echo '::error::Add RELEASE_PLEASE_TOKEN: a GitHub PAT with Contents, Issues, and Pull requests read/write access to this repository.'
-            exit 1
-          fi
-
       - name: Open release PR or publish merged release
+        id: release
         uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ github.token }}
           target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Explicit dispatches run with GITHUB_TOKEN, including for bot-created PRs.
+      - name: Run checks on the release PR branch
+        if: steps.release.outputs.prs_created == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+        run: |
+          set -euo pipefail
+          gh workflow run ci.yml --ref "$PR_BRANCH"
+          gh workflow run secret-scan.yml --ref "$PR_BRANCH"
+
+  docker:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      release_tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
