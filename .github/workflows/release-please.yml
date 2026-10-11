@@ -38,12 +38,12 @@ jobs:
 
       # Explicit dispatches run with GITHUB_TOKEN, including for bot-created PRs.
       - name: Run checks on the release PR branch
-        if: steps.release.outputs.prs_created == 'true'
+        if: success() && steps.release.outputs.prs_created == 'true' && steps.release.outputs.pr != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr || '{}').headBranchName }}
         run: |
           set -euo pipefail
           gh workflow run ci.yml --ref "$PR_BRANCH"
