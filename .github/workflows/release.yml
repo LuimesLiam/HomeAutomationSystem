@@ -1,0 +1,132 @@
+name: Release Docker image
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to release (for example v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.config.outputs.tag }}
+      image: ${{ steps.config.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Validate release configuration
+        id: config
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+          DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+          DOCKER_IMAGE_REPOSITORY: ${{ vars.DOCKER_IMAGE_REPOSITORY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          BUILD_WITH_CAMERAS: ${{ vars.BUILD_WITH_CAMERAS || 'true' }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*)?$ ]] || (( ${#RELEASE_TAG} > 128 )); then
+            echo '::error::Use a Docker-compatible version tag such as v0.1.0 or v0.1.0-rc.1.'
+            exit 1
+          fi
+          for name in DOCKER_REGISTRY DOCKER_IMAGE_REPOSITORY DOCKER_USERNAME DOCKER_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions setting: $name (registry/repository are variables; credentials are secrets)."
+              exit 1
+            fi
+          done
+          if [[ "$DOCKER_REGISTRY" == *://* || "$DOCKER_REGISTRY" == */* || "$DOCKER_REGISTRY" == *[[:space:]]* ]]; then
+            echo '::error::DOCKER_REGISTRY must be a hostname with optional port, without a scheme or path.'
+            exit 1
+          fi
+          if [[ "$DOCKER_IMAGE_REPOSITORY" != "$DOCKER_REGISTRY/"* || "$DOCKER_IMAGE_REPOSITORY" == *[[:space:]]* || "$DOCKER_IMAGE_REPOSITORY" == *@* || "${DOCKER_IMAGE_REPOSITORY#*/}" == *:* ]]; then
+            echo '::error::DOCKER_IMAGE_REPOSITORY must include the registry and repository path, without a tag or digest.'
+            exit 1
+          fi
+          if [[ "$BUILD_WITH_CAMERAS" != true && "$BUILD_WITH_CAMERAS" != false ]]; then
+            echo '::error::BUILD_WITH_CAMERAS must be true or false.'
+            exit 1
+          fi
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "image=$DOCKER_IMAGE_REPOSITORY:$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "cameras=$BUILD_WITH_CAMERAS" >> "$GITHUB_OUTPUT"
+
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ steps.config.outputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Log in to private registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ${{ vars.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push app image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.config.outputs.image }}
+          build-args: |
+            INCLUDE_CAMERA_SERVICES=${{ steps.config.outputs.cameras }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.config.outputs.tag }}
+          cache-from: type=gha,scope=homeapp-${{ steps.config.outputs.cameras }}
+          cache-to: type=gha,mode=max,scope=homeapp-${{ steps.config.outputs.cameras }}
+
+  release:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Publish image details to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.image.outputs.tag }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          printf 'Image: %s\nDigest: %s\nPinned image: %s@%s\n' \
+            "$IMAGE" "$DIGEST" "${IMAGE%:*}" "$DIGEST" > "$RUNNER_TEMP/docker-image.txt"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/docker-image.txt" --clobber
+            echo "Image details attached to existing release $RELEASE_TAG."
+            exit 0
+          fi
+          printf 'Container image: `%s`\n\nDigest: `%s`\n\nPull with an authenticated registry account:\n\n```bash\ndocker pull %s\n```\n' \
+            "$IMAGE" "$DIGEST" "$IMAGE" > "$RUNNER_TEMP/release-notes.md"
+          args=(--verify-tag --title "$RELEASE_TAG" --generate-notes --notes-file "$RUNNER_TEMP/release-notes.md")
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            args+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" "${args[@]}"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/docker-image.txt" --clobber
