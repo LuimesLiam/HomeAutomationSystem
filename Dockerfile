@@ -20,7 +20,7 @@ RUN if [ -f dist/web-app/browser/index.csr.html ]; then mv dist/web-app/browser/
 # ----------------------------
 # Stage 2: Build .NET backend
 # ----------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS backend-build
+FROM mcr.microsoft.com/dotnet/sdk:11.0-alpine AS backend-build
 WORKDIR /src
 
 # Copy & publish your ASP.NET Core app
